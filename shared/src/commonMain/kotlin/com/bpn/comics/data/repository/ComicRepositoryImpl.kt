@@ -43,6 +43,50 @@ class ComicRepositoryImpl(
             ?.toComic()
     }
     
+    override suspend fun getInitialComics(count: Int): List<Comic> {
+        return try {
+            val comics = apiService.getRecentComics(count)
+            // Cache the comics locally
+            insertComics(comics)
+            comics
+        } catch (e: Exception) {
+            println("❌ ComicRepository: Error fetching initial comics: ${e.message}")
+            println("📦 ComicRepository: Falling back to cached comics")
+            // Fallback to cached comics if available
+            val cachedComics = getAllCachedComics().take(count)
+            if (cachedComics.isNotEmpty()) {
+                return cachedComics.sortedByDescending { it.num }
+            }
+            emptyList()
+        }
+    }
+    
+    override suspend fun loadMoreComics(oldestComicNumber: Int, count: Int): List<Comic> {
+        return try {
+            val startNumber = maxOf(1, oldestComicNumber - count)
+            val endNumber = oldestComicNumber - 1
+            val comics = apiService.getComicsRange(startNumber, endNumber)
+            // Cache the comics locally
+            insertComics(comics)
+            comics
+        } catch (e: Exception) {
+            println("❌ ComicRepository: Error loading more comics: ${e.message}")
+            println("📦 ComicRepository: Falling back to cached comics for pagination")
+            val cachedComics = getAllCachedComics()
+                .filter { it.num < oldestComicNumber }
+                .sortedByDescending { it.num }
+                .take(count)
+            if (cachedComics.isNotEmpty()) {
+                return cachedComics
+            }
+            emptyList()
+        }
+    }
+    
+    override fun hasMoreComics(oldestComicNumber: Int): Boolean {
+        return oldestComicNumber > 1
+    }
+    
     override suspend fun clearCache() {
         database.comicEntityQueries.clearAllComics()
     }
@@ -64,6 +108,15 @@ class ComicRepositoryImpl(
             safe_title = comic.safe_title,
             transcript = comic.transcript
         )
+    }
+    
+    /**
+     * Insert multiple comics to database.
+     */
+    private suspend fun insertComics(comics: List<Comic>) {
+        comics.forEach { comic ->
+            saveComicToDatabase(comic)
+        }
     }
     
     /**

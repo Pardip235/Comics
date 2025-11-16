@@ -1,24 +1,35 @@
 package com.bpn.comics
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.bpn.comics.data.model.Comic
 import com.bpn.comics.data.repository.ComicRepositoryFactory
 import com.bpn.comics.domain.repository.ComicRepository
+import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
+import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
+import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
 import com.bpn.comics.platform.DatabaseDriverFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComicsApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     
-    // Initialize repository once
+    // Initialize repository and use cases
     val repository: ComicRepository? = remember {
         try {
             println("🔄 Initializing repository...")
@@ -33,107 +44,212 @@ fun ComicsApp() {
         }
     }
     
-    // State for UI
-    var resultText by remember { mutableStateOf("Click button to test API call") }
+    val getInitialComicsUseCase = remember(repository) {
+        repository?.let { GetInitialComicsUseCase(it) }
+    }
+    
+    val loadMoreComicsUseCase = remember(repository) {
+        repository?.let { LoadMoreComicsUseCase(it) }
+    }
+    
+    val hasMoreComicsUseCase = remember(repository) {
+        repository?.let { HasMoreComicsUseCase(it) }
+    }
+    
+    // State for comics list
+    var comics by remember { mutableStateOf<List<Comic>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var isLoadingMore by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hasMore by remember { mutableStateOf(true) }
+    
+    // Load initial comics when composable is first displayed
+    LaunchedEffect(Unit) {
+        if (getInitialComicsUseCase != null && comics.isEmpty() && !isLoading) {
+            scope.launch(Dispatchers.IO) {
+                isLoading = true
+                errorMessage = null
+                try {
+                    println("🔄 Loading initial comics...")
+                    val initialComics = getInitialComicsUseCase(10)
+                    comics = initialComics
+                    hasMore = hasMoreComicsUseCase?.invoke(initialComics.minOfOrNull { it.num } ?: 0) ?: false
+                    println("✅ Loaded ${initialComics.size} initial comics")
+                } catch (e: Exception) {
+                    errorMessage = "Error: ${e.message}"
+                    println("❌ Error loading initial comics: ${e.message}")
+                    e.printStackTrace()
+                } finally {
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    // Detect when user scrolls near the end and load more comics
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastVisibleIndex ->
+                val totalItems = comics.size
+                // Load more when user scrolls to within 3 items of the end
+                if (lastVisibleIndex != null && 
+                    lastVisibleIndex >= totalItems - 3 && 
+                    hasMore && 
+                    !isLoadingMore && 
+                    loadMoreComicsUseCase != null &&
+                    hasMoreComicsUseCase != null) {
+                    
+                    val oldestComicNumber = comics.minOfOrNull { it.num } ?: 0
+                    if (hasMoreComicsUseCase.invoke(oldestComicNumber)) {
+                        scope.launch(Dispatchers.IO) {
+                            isLoadingMore = true
+                            try {
+                                println("🔄 Loading more comics... (oldest: $oldestComicNumber)")
+                                val moreComics = loadMoreComicsUseCase(oldestComicNumber, 10)
+                                if (moreComics.isNotEmpty()) {
+                                    comics = comics + moreComics
+                                    val newOldest = comics.minOfOrNull { it.num } ?: 0
+                                    hasMore = hasMoreComicsUseCase.invoke(newOldest)
+                                    println("✅ Loaded ${moreComics.size} more comics. Total: ${comics.size}")
+                                } else {
+                                    hasMore = false
+                                    println("📦 No more comics available")
+                                }
+                            } catch (e: Exception) {
+                                println("❌ Error loading more comics: ${e.message}")
+                                e.printStackTrace()
+                            } finally {
+                                isLoadingMore = false
+                            }
+                        }
+                    } else {
+                        hasMore = false
+                    }
+                }
+            }
+    }
     
     MaterialTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "Comic Repository Test",
-                style = MaterialTheme.typography.headlineMedium
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top bar
+            TopAppBar(
+                title = { Text("XKCD Comics") }
             )
             
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Test Latest Comic Button
-            Button(
-                onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        isLoading = true
-                        errorMessage = null
-                        try {
-                            println("🔄 Starting API call to get latest comic...")
-                            val comic = repository?.getLatestComic()
-                            if (comic != null) {
-                                resultText = "#${comic.num}: ${comic.title}"
-                                println("✅ Success! Latest comic: #${comic.num} - ${comic.title}")
-                                println("   Image URL: ${comic.img}")
-                                println("   Alt text: ${comic.alt}")
-                            }
-                        } catch (e: Exception) {
-                            errorMessage = "Error: ${e.message}"
-                            resultText = "Error occurred"
-                            println("❌ Error fetching comic: ${e.message}")
-                            e.printStackTrace()
-                        } finally {
-                            isLoading = false
-                        }
-                    }
-                },
-                enabled = repository != null && !isLoading
-            ) {
-                Text(if (isLoading) "Loading..." else "Get Latest Comic")
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Test Cached Comics Button
-            Button(
-                onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            println("📦 Fetching cached comics from database...")
-                            val cached = repository?.getAllCachedComics()
-                            resultText = "Cached: ${cached?.size ?: 0} comics"
-                            println("✅ Found ${cached?.size ?: 0} cached comics")
-                            cached?.forEach { comic ->
-                                println("   - #${comic.num}: ${comic.title}")
-                            }
-                        } catch (e: Exception) {
-                            errorMessage = "Error: ${e.message}"
-                            println("❌ Error fetching cached comics: ${e.message}")
-                            e.printStackTrace()
-                        }
-                    }
-                },
-                enabled = repository != null && !isLoading
-            ) {
-                Text("Get Cached Comics")
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Display results
-            if (resultText.isNotEmpty()) {
-                Text(
-                    text = resultText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            
+            // Error message
             if (errorMessage != null) {
-                Text(
-                    text = errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(8.dp)
-                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+            
+            // Loading indicator for initial load
+            if (isLoading && comics.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                // Comics list
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(comics) { comic ->
+                        ComicItem(comic = comic)
+                    }
+                    
+                    // Loading indicator for pagination
+                    if (isLoadingMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    }
+                    
+                    // End of list message
+                    if (!hasMore && comics.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "No more comics available",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
             
             if (repository == null) {
                 Text(
                     text = "Repository not initialized",
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ComicItem(comic: Comic) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "#${comic.num}: ${comic.title}",
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "${comic.year}-${comic.month}-${comic.day}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            if (comic.alt.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = comic.alt,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

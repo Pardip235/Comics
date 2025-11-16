@@ -39,3 +39,23 @@ SELECT COUNT(*) FROM ComicEntity WHERE num = ? AND is_favorite = 1;
 
 clearAllComics:
 DELETE FROM ComicEntity;
+
+-- Clear comics older than specified timestamp, but preserve favorites
+clearOldComics:
+DELETE FROM ComicEntity 
+WHERE created_at < ? AND is_favorite = 0;
+
+-- Get count of non-favorite comics
+getNonFavoriteComicCount:
+SELECT COUNT(*) FROM ComicEntity WHERE is_favorite = 0;
+
+-- Get oldest non-favorite comics (for size-based cache clearing)
+getOldestNonFavoriteComics:
+SELECT * FROM ComicEntity 
+WHERE is_favorite = 0 
+ORDER BY created_at ASC 
+LIMIT ?;
+
+-- Delete a specific comic by number
+deleteComicByNumber:
+DELETE FROM ComicEntity WHERE num = ?;

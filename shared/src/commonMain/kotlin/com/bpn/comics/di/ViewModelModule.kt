@@ -11,7 +11,7 @@ val viewModelModule = module {
     single { FavoritesEventManager() }
     
     // ViewModels
-    factory { ComicsViewModel(get(), get(), get(), get(), get()) }
+    factory { ComicsViewModel(get(), get(), get(), get(), get(), get()) }
     factory { ComicDetailViewModel(get(), get(), get()) }
     factory { FavoritesViewModel(get(), get(), get()) }
 }

@@ -7,6 +7,7 @@ import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.IsFavoriteUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
+import com.bpn.comics.domain.usecase.PerformCacheCleanupUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
 import org.koin.dsl.module
 
@@ -19,5 +20,6 @@ val useCaseModule = module {
     factory { GetFavoriteComicsUseCase(get()) }
     factory { ToggleFavoriteUseCase(get()) }
     factory { IsFavoriteUseCase(get()) }
+    factory { PerformCacheCleanupUseCase(get()) }
 }
 

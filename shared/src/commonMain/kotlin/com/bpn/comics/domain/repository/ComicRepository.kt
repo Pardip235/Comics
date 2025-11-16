@@ -65,8 +65,15 @@ interface ComicRepository {
     suspend fun isFavorite(comicNumber: Int): Boolean
     
     /**
-     * Clear all cached comics from database.
+     * Perform automatic cache cleanup based on age and size limits.
+     * This is a convenience method that combines time-based and size-based clearing.
+     * @param maxAgeDays Maximum age in days for cached comics (favorites preserved)
+     * @param maxNonFavoriteComics Maximum number of non-favorite comics to keep
+     * @return Total number of comics deleted
      */
-    suspend fun clearCache()
+    suspend fun performAutomaticCacheCleanup(
+        maxAgeDays: Long,
+        maxNonFavoriteComics: Int
+    ): Int
 }
 

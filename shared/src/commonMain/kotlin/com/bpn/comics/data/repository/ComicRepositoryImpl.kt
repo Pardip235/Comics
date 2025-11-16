@@ -5,6 +5,7 @@ import com.bpn.comics.data.model.Comic
 import com.bpn.comics.database.ComicsDatabase
 import com.bpn.comics.database.ComicEntity
 import com.bpn.comics.domain.repository.ComicRepository
+import com.bpn.comics.util.getCurrentTimestampSeconds
 
 /**
  * Implementation of ComicRepository.
@@ -131,8 +132,71 @@ class ComicRepositoryImpl(
         return oldestComicNumber > 1
     }
     
-    override suspend fun clearCache() {
-        database.comicEntityQueries.clearAllComics()
+    override suspend fun performAutomaticCacheCleanup(
+        maxAgeDays: Long,
+        maxNonFavoriteComics: Int
+    ): Int {
+        // Calculate timestamp threshold (current time - maxAgeDays)
+        val currentTime = getCurrentTimestampSeconds()
+        val ageThreshold = currentTime - (maxAgeDays * 24 * 60 * 60)
+        
+        // Clear old comics (time-based) - preserves favorites
+        val deletedByAge = clearOldComics(ageThreshold)
+        
+        // Clear comics exceeding size limit (size-based) - preserves favorites
+        val deletedBySize = clearCacheExceedingLimit(maxNonFavoriteComics)
+        
+        // Return total deleted
+        return deletedByAge + deletedBySize
+    }
+    
+    /**
+     * Clear comics older than the specified timestamp, preserving favorites.
+     * Internal implementation detail used by performAutomaticCacheCleanup.
+     */
+    private fun clearOldComics(olderThanTimestamp: Long): Int {
+        // Get count before deletion
+        val countBefore = getNonFavoriteComicCount()
+        
+        // Delete old comics (preserves favorites)
+        database.comicEntityQueries.clearOldComics(olderThanTimestamp)
+        
+        // Get count after deletion
+        val countAfter = getNonFavoriteComicCount()
+        
+        return countBefore - countAfter
+    }
+    
+    /**
+     * Clear cache to stay within size limit, preserving favorites.
+     * Internal implementation detail used by performAutomaticCacheCleanup.
+     */
+    private fun clearCacheExceedingLimit(maxNonFavoriteComics: Int): Int {
+        val currentCount = getNonFavoriteComicCount()
+        if (currentCount <= maxNonFavoriteComics) {
+            return 0
+        }
+        
+        val toDelete = currentCount - maxNonFavoriteComics
+        val oldestComics = database.comicEntityQueries.getOldestNonFavoriteComics(toDelete.toLong())
+            .executeAsList()
+        
+        // Delete the oldest non-favorite comics
+        oldestComics.forEach { comicEntity ->
+            database.comicEntityQueries.deleteComicByNumber(comicEntity.num)
+        }
+        
+        return oldestComics.size
+    }
+    
+    /**
+     * Get the count of non-favorite comics in cache.
+     * Internal implementation detail used by cache cleanup methods.
+     */
+    private fun getNonFavoriteComicCount(): Int {
+        return database.comicEntityQueries.getNonFavoriteComicCount()
+            .executeAsOne()
+            .toInt()
     }
     
     /**

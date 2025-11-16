@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
+import com.bpn.comics.domain.usecase.PerformCacheCleanupUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
 import com.bpn.comics.presentation.FavoritesEventManager
 import com.bpn.comics.util.ErrorType
@@ -25,14 +26,36 @@ class ComicsViewModel(
     private val loadMoreComicsUseCase: LoadMoreComicsUseCase,
     private val hasMoreComicsUseCase: HasMoreComicsUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    private val favoritesEventManager: FavoritesEventManager
+    private val favoritesEventManager: FavoritesEventManager,
+    private val performCacheCleanupUseCase: PerformCacheCleanupUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ComicsUiState())
     val uiState: StateFlow<ComicsUiState> = _uiState.asStateFlow()
 
     init {
+        // Perform automatic cache cleanup on app start (background task)
+        performCacheCleanup()
+        // Load initial comics
         loadInitialComics()
+    }
+    
+    /**
+     * Perform automatic cache cleanup in the background.
+     * This runs silently without affecting the UI.
+     */
+    private fun performCacheCleanup() {
+        viewModelScope.launch {
+            try {
+                val deletedCount = performCacheCleanupUseCase()
+                if (deletedCount > 0) {
+                    println("🧹 ComicsViewModel: Cleaned up $deletedCount old comics from cache")
+                }
+            } catch (e: Exception) {
+                // Silently fail - cache cleanup shouldn't block app startup
+                println("⚠️ ComicsViewModel: Cache cleanup failed: ${e.message}")
+            }
+        }
     }
 
     /**

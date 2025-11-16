@@ -4,6 +4,7 @@ import com.bpn.comics.data.model.Comic
 import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
+import com.bpn.comics.domain.usecase.PerformCacheCleanupUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
 import com.bpn.comics.presentation.FavoritesEventManager
 import com.bpn.comics.test.MainTest
@@ -32,6 +33,7 @@ class ComicsViewModelTest : MainTest() {
         val mockLoadMoreComicsUseCase = mockk<LoadMoreComicsUseCase>()
         val mockHasMoreComicsUseCase = mockk<HasMoreComicsUseCase>()
         val mockToggleFavoriteUseCase = mockk<ToggleFavoriteUseCase>()
+        val mockPerformCacheCleanupUseCase = mockk<PerformCacheCleanupUseCase>()
         val favoritesEventManager = FavoritesEventManager()
 
         val testComics = listOf(
@@ -50,13 +52,15 @@ class ComicsViewModelTest : MainTest() {
         coEvery { mockGetInitialComicsUseCase(any()) } returns testComics
         every { mockHasMoreComicsUseCase(any()) } returns false
         coEvery { mockToggleFavoriteUseCase(1) } returns true
+        coEvery { mockPerformCacheCleanupUseCase() } returns 0
 
         val viewModel = ComicsViewModel(
             mockGetInitialComicsUseCase,
             mockLoadMoreComicsUseCase,
             mockHasMoreComicsUseCase,
             mockToggleFavoriteUseCase,
-            favoritesEventManager
+            favoritesEventManager,
+            mockPerformCacheCleanupUseCase
         )
 
         // Wait for initial load to complete
@@ -81,6 +85,7 @@ class ComicsViewModelTest : MainTest() {
         val mockLoadMoreComicsUseCase = mockk<LoadMoreComicsUseCase>()
         val mockHasMoreComicsUseCase = mockk<HasMoreComicsUseCase>()
         val mockToggleFavoriteUseCase = mockk<ToggleFavoriteUseCase>()
+        val mockPerformCacheCleanupUseCase = mockk<PerformCacheCleanupUseCase>()
         val favoritesEventManager = FavoritesEventManager()
 
         val testComics = listOf(
@@ -90,13 +95,15 @@ class ComicsViewModelTest : MainTest() {
 
         coEvery { mockGetInitialComicsUseCase(any()) } returns testComics
         every { mockHasMoreComicsUseCase(1) } returns false
+        coEvery { mockPerformCacheCleanupUseCase() } returns 0
 
         val viewModel = ComicsViewModel(
             mockGetInitialComicsUseCase,
             mockLoadMoreComicsUseCase,
             mockHasMoreComicsUseCase,
             mockToggleFavoriteUseCase,
-            favoritesEventManager
+            favoritesEventManager,
+            mockPerformCacheCleanupUseCase
         )
 
         // Wait for initial load

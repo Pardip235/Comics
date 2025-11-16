@@ -48,12 +48,25 @@ kotlin {
             implementation(libs.ktor.client.android)
             implementation(libs.koin.android)
         }
+        
+        val androidUnitTest by getting {
+            dependencies {
+                // Use JVM driver for unit tests since they run on JVM
+                implementation(libs.sqlDelight.driver.jvm)
+                // MockK and JUnit need to be explicitly added for Android unit tests
+                implementation(libs.mockk)
+                implementation(libs.junit)
+            }
+        }
         iosMain.dependencies {
             implementation(libs.sqlDelight.native.driver)
             implementation(libs.ktor.client.darwin)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+            implementation(libs.mockk)
+            implementation(libs.junit)
         }
     }
 }

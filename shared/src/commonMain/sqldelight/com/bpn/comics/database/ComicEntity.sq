@@ -10,21 +10,32 @@ CREATE TABLE ComicEntity (
     news TEXT,
     safe_title TEXT,
     transcript TEXT,
+    is_favorite INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 CREATE INDEX ComicEntity_created_at ON ComicEntity(created_at);
+CREATE INDEX ComicEntity_is_favorite ON ComicEntity(is_favorite);
 
 -- Queries
 insertComic:
-INSERT OR REPLACE INTO ComicEntity (num, title, img, alt, year, month, day, link, news, safe_title, transcript)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO ComicEntity (num, title, img, alt, year, month, day, link, news, safe_title, transcript, is_favorite)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 getAllComics:
 SELECT * FROM ComicEntity ORDER BY created_at DESC;
 
 getComicByNumber:
 SELECT * FROM ComicEntity WHERE num = ?;
+
+getFavoriteComics:
+SELECT * FROM ComicEntity WHERE is_favorite = 1 ORDER BY created_at DESC;
+
+updateFavoriteStatus:
+UPDATE ComicEntity SET is_favorite = ? WHERE num = ?;
+
+isFavorite:
+SELECT COUNT(*) FROM ComicEntity WHERE num = ? AND is_favorite = 1;
 
 clearAllComics:
 DELETE FROM ComicEntity;

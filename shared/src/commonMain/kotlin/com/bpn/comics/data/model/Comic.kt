@@ -24,4 +24,6 @@ data class Comic(
     @SerialName("safe_title")
     val safe_title: String = title,
     val transcript: String = "",
+    // This field is not part of the API response but is used for local state
+    val isFavorite: Boolean = false
 )

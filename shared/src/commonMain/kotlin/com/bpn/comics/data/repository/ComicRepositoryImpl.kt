@@ -28,7 +28,9 @@ class ComicRepositoryImpl(
         val comic = apiService.getComicByNumber(number)
         // Cache in database
         saveComicToDatabase(comic)
-        return comic
+        // Return with favorite status from database
+        val isFavorite = isFavorite(number)
+        return comic.copy(isFavorite = isFavorite)
     }
     
     override suspend fun getAllCachedComics(): List<Comic> {
@@ -43,16 +45,54 @@ class ComicRepositoryImpl(
             ?.toComic()
     }
     
+    override suspend fun getFavoriteComics(): List<Comic> {
+        return database.comicEntityQueries.getFavoriteComics()
+            .executeAsList()
+            .map { it.toComic() }
+    }
+    
+    override suspend fun toggleFavorite(comicNumber: Int): Boolean {
+        val comic = getCachedComicByNumber(comicNumber)
+        return if (comic != null) {
+            val currentFavoriteStatus = comic.isFavorite
+            val newFavoriteStatus = !currentFavoriteStatus
+            database.comicEntityQueries.updateFavoriteStatus(
+                is_favorite = if (newFavoriteStatus) 1L else 0L,
+                num = comicNumber.toLong()
+            )
+            newFavoriteStatus
+        } else {
+            // If comic is not in database, fetch from API and cache it
+            try {
+                val apiComic = apiService.getComicByNumber(comicNumber)
+                saveComicToDatabase(apiComic.copy(isFavorite = true))
+                true
+            } catch (e: Exception) {
+                println("❌ ComicRepository: Error fetching comic for favorite: ${e.message}")
+                false
+            }
+        }
+    }
+    
+    override suspend fun isFavorite(comicNumber: Int): Boolean {
+        return database.comicEntityQueries.isFavorite(comicNumber.toLong())
+            .executeAsOne() > 0
+    }
+    
     override suspend fun getInitialComics(count: Int): List<Comic> {
         return try {
             val comics = apiService.getRecentComics(count)
-            // Cache the comics locally
+            // Cache the comics locally and merge with favorite status
             insertComics(comics)
-            comics
+            // Return comics with favorite status from database
+            comics.map { comic ->
+                val isFavorite = isFavorite(comic.num)
+                comic.copy(isFavorite = isFavorite)
+            }
         } catch (e: Exception) {
             println("❌ ComicRepository: Error fetching initial comics: ${e.message}")
             println("📦 ComicRepository: Falling back to cached comics")
-            // Fallback to cached comics if available
+            // Fallback to cached comics if available (already have favorite status)
             val cachedComics = getAllCachedComics().take(count)
             if (cachedComics.isNotEmpty()) {
                 return cachedComics.sortedByDescending { it.num }
@@ -66,9 +106,13 @@ class ComicRepositoryImpl(
             val startNumber = maxOf(1, oldestComicNumber - count)
             val endNumber = oldestComicNumber - 1
             val comics = apiService.getComicsRange(startNumber, endNumber)
-            // Cache the comics locally
+            // Cache the comics locally and merge with favorite status
             insertComics(comics)
-            comics
+            // Return comics with favorite status from database
+            comics.map { comic ->
+                val isFavorite = isFavorite(comic.num)
+                comic.copy(isFavorite = isFavorite)
+            }
         } catch (e: Exception) {
             println("❌ ComicRepository: Error loading more comics: ${e.message}")
             println("📦 ComicRepository: Falling back to cached comics for pagination")
@@ -93,8 +137,13 @@ class ComicRepositoryImpl(
     
     /**
      * Save comic to database, converting Comic model to ComicEntity.
+     * Preserves favorite status if comic already exists in database.
      */
     private suspend fun saveComicToDatabase(comic: Comic) {
+        // Check if comic exists and preserve favorite status
+        val existingComic = getCachedComicByNumber(comic.num)
+        val favoriteStatus = existingComic?.isFavorite ?: comic.isFavorite
+        
         database.comicEntityQueries.insertComic(
             num = comic.num.toLong(),
             title = comic.title,
@@ -106,7 +155,8 @@ class ComicRepositoryImpl(
             link = comic.link,
             news = comic.news,
             safe_title = comic.safe_title,
-            transcript = comic.transcript
+            transcript = comic.transcript,
+            is_favorite = if (favoriteStatus) 1L else 0L
         )
     }
     
@@ -134,7 +184,8 @@ class ComicRepositoryImpl(
             link = link,
             news = news,
             safe_title = safe_title ?: title,
-            transcript = transcript ?: ""
+            transcript = transcript ?: "",
+            isFavorite = is_favorite > 0 // Convert database value to boolean
         )
     }
 }

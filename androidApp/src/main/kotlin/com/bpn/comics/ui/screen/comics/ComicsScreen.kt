@@ -43,12 +43,18 @@ fun ComicsScreen(
         )
 
         when {
-            uiState.isLoading && uiState.comics.isEmpty() -> LoadingScreen(message = "Loading comics...")
-            uiState.errorType != null -> ErrorScreen(
-                errorType = uiState.errorType,
-                onRetry = viewModel::retry
-            )
-            uiState.comics.isEmpty() -> EmptyScreen(message = "No comics available")
+            uiState.isLoading && uiState.comics.isEmpty() -> {
+                LoadingScreen(message = "Loading comics...")
+            }
+            uiState.errorType != null -> {
+                ErrorScreen(
+                    errorType = uiState.errorType,
+                    onRetry = viewModel::retry
+                )
+            }
+            uiState.comics.isEmpty() -> {
+                EmptyScreen(message = "No comics available")
+            }
             else -> {
                 LazyColumn(
                     state = listState,
@@ -62,7 +68,10 @@ fun ComicsScreen(
                         val comic = uiState.comics[index]
                         ComicCard(
                             comic = comic,
-                            onClick = { onComicClick(comic.num) }
+                            onClick = { onComicClick(comic.num) },
+                            onFavoriteClick = {
+                                viewModel.toggleFavorite(comic.num)
+                            }
                         )
                     }
 
@@ -81,9 +90,11 @@ fun ComicsScreen(
                 // Observe scroll position to trigger next page
                 val shouldLoadMore = remember {
                     derivedStateOf {
-                        val lastVisible =
-                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        lastVisible >= uiState.comics.size - 3 && !uiState.isLoadingMore && uiState.hasMore
+                        val lastVisible = listState.layoutInfo
+                            .visibleItemsInfo.lastOrNull()?.index ?: 0
+                        lastVisible >= uiState.comics.size - 3 &&
+                                !uiState.isLoadingMore &&
+                                uiState.hasMore
                     }
                 }
 
@@ -96,8 +107,6 @@ fun ComicsScreen(
         }
     }
 }
-
-
 
 @Preview(showBackground = true)
 @Composable
@@ -143,7 +152,8 @@ private fun ComicCardListPreview() {
             ) { index ->
                 ComicCard(
                     comic = sampleComics[index],
-                    onClick = {}
+                    onClick = {},
+                    onFavoriteClick = {}
                 )
             }
         }

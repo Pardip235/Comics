@@ -1,8 +1,10 @@
 package com.bpn.comics.ui.screen.comics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,9 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +38,7 @@ import com.bpn.comics.data.model.Comic
 fun ComicCard(
     comic: Comic,
     onClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -49,54 +57,69 @@ fun ComicCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(220.dp)
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 12.dp,
+                                topEnd = 12.dp
+                            )
+                        ),
                     contentScale = ContentScale.Fit,
                     loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                        }
+                        ImageLoadingPlaceholder()
                     },
                     error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Image unavailable",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
+                        ImageErrorPlaceholder()
                     }
                 )
             }
 
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = comic.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = comic.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    IconButton(
+                        onClick = onFavoriteClick,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        val icon = if (comic.isFavorite) {
+                            Icons.Default.Favorite
+                        } else {
+                            Icons.Default.FavoriteBorder
+                        }
+                        val contentDesc = if (comic.isFavorite) {
+                            "Remove from favorites"
+                        } else {
+                            "Add to favorites"
+                        }
+                        val tint = if (comic.isFavorite) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = contentDesc,
+                            tint = tint
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Comic #${comic.num} • ${comic.month}/${comic.day}/${comic.year}",
+                    text = "Comic #${comic.num} • " +
+                            "${comic.month}/${comic.day}/${comic.year}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -116,6 +139,50 @@ fun ComicCard(
     }
 }
 
+@Composable
+private fun ImageLoadingPlaceholder() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 12.dp,
+                    topEnd = 12.dp
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+    }
+}
+
+@Composable
+private fun ImageErrorPlaceholder() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 12.dp,
+                    topEnd = 12.dp
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Image unavailable",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(16.dp)
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun ComicCardPreview() {
@@ -128,9 +195,11 @@ private fun ComicCardPreview() {
                 alt = "Don't we all.",
                 year = "2006",
                 month = "1",
-                day = "1"
+                day = "1",
+                isFavorite = true
             ),
-            onClick = {}
+            onClick = {},
+            onFavoriteClick = {}
         )
     }
 }

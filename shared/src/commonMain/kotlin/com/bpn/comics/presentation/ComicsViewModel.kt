@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
+import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
 import com.bpn.comics.util.ErrorType
 import com.bpn.comics.util.PaginationConfig
 import com.bpn.comics.util.isIOException
@@ -21,7 +22,9 @@ import kotlinx.coroutines.launch
 class ComicsViewModel(
     private val getInitialComicsUseCase: GetInitialComicsUseCase,
     private val loadMoreComicsUseCase: LoadMoreComicsUseCase,
-    private val hasMoreComicsUseCase: HasMoreComicsUseCase
+    private val hasMoreComicsUseCase: HasMoreComicsUseCase,
+    private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
+    private val favoritesEventManager: FavoritesEventManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ComicsUiState())
@@ -69,7 +72,10 @@ class ComicsViewModel(
                         errorType = errorType
                     )
                 }
-                println("❌ ViewModel: Error loading initial comics: ${e.message} (Type: $errorType)")
+                println(
+                    "❌ ViewModel: Error loading initial comics: " +
+                            "${e.message} (Type: $errorType)"
+                )
             }
         }
     }
@@ -97,7 +103,10 @@ class ComicsViewModel(
             
             try {
                 println("🔄 ViewModel: Loading more comics... (oldest: $oldestComicNumber)")
-                val moreComics = loadMoreComicsUseCase(oldestComicNumber, PaginationConfig.PAGINATION_LOAD_COUNT)
+                val moreComics = loadMoreComicsUseCase(
+                    oldestComicNumber = oldestComicNumber,
+                    count = PaginationConfig.PAGINATION_LOAD_COUNT
+                )
                 
                 if (moreComics.isNotEmpty()) {
                     val updatedComics = currentState.comics + moreComics
@@ -111,7 +120,9 @@ class ComicsViewModel(
                             hasMore = hasMore
                         )
                     }
-                    println("✅ ViewModel: Loaded ${moreComics.size} more comics. Total: ${updatedComics.size}")
+                    println("✅ ViewModel: Loaded ${moreComics.size} more comics. " +
+                            "Total: ${updatedComics.size}"
+                    )
                 } else {
                     _uiState.update {
                         it.copy(
@@ -133,7 +144,10 @@ class ComicsViewModel(
                         errorType = errorType
                     )
                 }
-                println("❌ ViewModel: Error loading more comics: ${e.message} (Type: $errorType)")
+                println(
+                    "❌ ViewModel: Error loading more comics: " +
+                            "${e.message} (Type: $errorType)"
+                )
             }
         }
     }
@@ -168,14 +182,74 @@ class ComicsViewModel(
     }
 
     /**
-     * Clear error.
+     * Toggle favorite status for a comic.
+     * Uses optimistic UI update for better UX.
      */
-    fun clearError() {
-        _uiState.update { 
-            it.copy(
-                errorType = null
+    fun toggleFavorite(comicNumber: Int) {
+        val currentComic = _uiState.value.comics.find { it.num == comicNumber }
+            ?: return
+
+        // Optimistic UI update - toggle immediately
+        val optimisticFavoriteStatus = !currentComic.isFavorite
+        _uiState.update { currentState ->
+            currentState.copy(
+                comics = currentState.comics.map { comic ->
+                    if (comic.num == comicNumber) {
+                        comic.copy(isFavorite = optimisticFavoriteStatus)
+                    } else {
+                        comic
+                    }
+                }
             )
         }
+
+        viewModelScope.launch {
+            try {
+                val newFavoriteStatus = toggleFavoriteUseCase(comicNumber)
+                // Update with actual result from repository
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        comics = currentState.comics.map { comic ->
+                            if (comic.num == comicNumber) {
+                                comic.copy(isFavorite = newFavoriteStatus)
+                            } else {
+                                comic
+                            }
+                        },
+                        errorType = null
+                    )
+                }
+                println(
+                    "✅ ComicsViewModel: Toggled favorite for " +
+                            "comic #$comicNumber: $newFavoriteStatus"
+                )
+                // Notify that favorites have changed (for cross-platform observers)
+                favoritesEventManager.notifyFavoritesChanged()
+            } catch (e: Exception) {
+                // Revert optimistic update on error
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        comics = currentState.comics.map { comic ->
+                            if (comic.num == comicNumber) {
+                                comic.copy(isFavorite = currentComic.isFavorite)
+                            } else {
+                                comic
+                            }
+                        },
+                        errorType = if (isKtorNetworkException(e) || isIOException(e)) {
+                            ErrorType.NETWORK_ERROR
+                        } else {
+                            ErrorType.UNKNOWN_ERROR
+                        }
+                    )
+                }
+                println(
+                    "❌ ComicsViewModel: Error toggling favorite for " +
+                            "comic #$comicNumber: ${e.message}"
+                )
+            }
+        }
     }
+
 }
 

@@ -49,6 +49,22 @@ interface ComicRepository {
     suspend fun getCachedComicByNumber(number: Int): Comic?
     
     /**
+     * Get all favorite comics from local database.
+     */
+    suspend fun getFavoriteComics(): List<Comic>
+    
+    /**
+     * Toggle favorite status for a comic.
+     * @return The new favorite status (true if now favorite, false if not)
+     */
+    suspend fun toggleFavorite(comicNumber: Int): Boolean
+    
+    /**
+     * Check if a comic is marked as favorite.
+     */
+    suspend fun isFavorite(comicNumber: Int): Boolean
+    
+    /**
      * Clear all cached comics from database.
      */
     suspend fun clearCache()

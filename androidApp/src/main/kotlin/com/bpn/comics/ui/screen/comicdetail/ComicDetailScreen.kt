@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +44,14 @@ fun ComicDetailScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    if (uiState.comic != null) {
+                        FavoriteIconButton(
+                            isFavorite = uiState.comic!!.isFavorite,
+                            onToggle = { viewModel.toggleFavorite() }
+                        )
+                    }
                 }
             )
         }
@@ -58,6 +68,35 @@ fun ComicDetailScreen(
             )
             else -> EmptyScreen(message = "Comic not found")
         }
+    }
+}
+
+@Composable
+private fun FavoriteIconButton(
+    isFavorite: Boolean,
+    onToggle: () -> Unit
+) {
+    IconButton(onClick = onToggle) {
+        val icon = if (isFavorite) {
+            Icons.Default.Favorite
+        } else {
+            Icons.Default.FavoriteBorder
+        }
+        val contentDesc = if (isFavorite) {
+            "Remove from favorites"
+        } else {
+            "Add to favorites"
+        }
+        val tint = if (isFavorite) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDesc,
+            tint = tint
+        )
     }
 }
 
@@ -122,7 +161,8 @@ private fun ComicDetailContent(
 
         // Comic Number and Date
         Text(
-            text = "Comic #${comic.num} • ${comic.month}/${comic.day}/${comic.year}",
+            text = "Comic #${comic.num} • " +
+                    "${comic.month}/${comic.day}/${comic.year}",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

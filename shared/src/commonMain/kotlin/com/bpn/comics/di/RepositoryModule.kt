@@ -8,7 +8,6 @@ import org.koin.dsl.module
 
 val repositoryModule = module {
     // Repository
-    single<ComicRepository> { ComicRepositoryImpl(apiService = get(), database = get())
-    }
+    single<ComicRepository> { ComicRepositoryImpl(apiService = get(), database = get()) }
 }
 

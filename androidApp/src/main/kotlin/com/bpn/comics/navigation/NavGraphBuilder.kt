@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.bpn.comics.ui.screen.comicdetail.ComicDetailScreen
 import com.bpn.comics.ui.screen.comics.ComicsScreen
+import com.bpn.comics.ui.screen.favorites.FavoritesScreen
 
 /**
  * Composable function that sets up all navigation routes
@@ -31,6 +32,14 @@ fun NavGraphSetup(
             )
         }
 
+        composable(ComicRoute.Favorites.route) {
+            FavoritesScreen(
+                onComicClick = { comicNumber ->
+                    navController.navigate(ComicRoute.ComicDetail.createRoute(comicNumber))
+                }
+            )
+        }
+
         composable(
             route = ComicRoute.ComicDetail.route,
             arguments = listOf(
@@ -45,7 +54,5 @@ fun NavGraphSetup(
                 onBackClick = { navController.popBackStack() }
             )
         }
-
-        // TODO: Add favorites screen later
     }
 }

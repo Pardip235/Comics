@@ -1,4 +1,4 @@
-package com.bpn.comics.presentation
+package com.bpn.comics.presentation.comicdetail
 
 import com.bpn.comics.data.model.Comic
 import com.bpn.comics.util.ErrorType

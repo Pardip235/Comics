@@ -1,4 +1,4 @@
-package com.bpn.comics.presentation
+package com.bpn.comics.presentation.comics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -6,6 +6,7 @@ import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
+import com.bpn.comics.presentation.FavoritesEventManager
 import com.bpn.comics.util.ErrorType
 import com.bpn.comics.util.PaginationConfig
 import com.bpn.comics.util.isIOException

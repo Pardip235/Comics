@@ -17,7 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import com.bpn.comics.data.model.Comic
-import com.bpn.comics.presentation.ComicDetailViewModel
+import com.bpn.comics.presentation.comicdetail.ComicDetailViewModel
 import com.bpn.comics.ui.common.EmptyScreen
 import com.bpn.comics.ui.common.ErrorScreen
 import com.bpn.comics.ui.common.LoadingScreen

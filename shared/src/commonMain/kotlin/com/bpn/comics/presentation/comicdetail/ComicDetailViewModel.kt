@@ -1,9 +1,10 @@
-package com.bpn.comics.presentation
+package com.bpn.comics.presentation.comicdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bpn.comics.domain.usecase.GetComicDetailUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
+import com.bpn.comics.presentation.FavoritesEventManager
 import com.bpn.comics.util.ErrorType
 import com.bpn.comics.util.isIOException
 import com.bpn.comics.util.isKtorNetworkException
@@ -148,6 +149,5 @@ class ComicDetailViewModel(
             }
         }
     }
-
 }
 

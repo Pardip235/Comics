@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bpn.comics.data.model.Comic
-import com.bpn.comics.presentation.ComicsViewModel
+import com.bpn.comics.presentation.comics.ComicsViewModel
 import com.bpn.comics.ui.common.EmptyScreen
 import com.bpn.comics.ui.common.ErrorScreen
 import com.bpn.comics.ui.common.LoadingScreen

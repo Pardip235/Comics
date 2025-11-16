@@ -1,4 +1,4 @@
-package com.bpn.comics.util
+package com.bpn.comics.platform
 
 /**
  * Android implementation of getCurrentTimestampSeconds.

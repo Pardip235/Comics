@@ -5,7 +5,7 @@ import com.bpn.comics.data.model.Comic
 import com.bpn.comics.database.ComicsDatabase
 import com.bpn.comics.database.ComicEntity
 import com.bpn.comics.domain.repository.ComicRepository
-import com.bpn.comics.util.getCurrentTimestampSeconds
+import com.bpn.comics.platform.getCurrentTimestampSeconds
 
 /**
  * Implementation of ComicRepository.

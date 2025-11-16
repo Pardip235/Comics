@@ -40,6 +40,8 @@ kotlin {
             implementation(libs.ktor.client.logging)
             // Koin
             implementation(libs.koin.core)
+            // ViewModel
+            implementation(libs.androidx.lifecycle.viewmodelCompose)
         }
         androidMain.dependencies {
             implementation(libs.sqlDelight.android.driver)

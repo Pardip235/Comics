@@ -10,7 +10,8 @@ fun appModule(): List<Module> {
         networkModule,
         databaseModule,
         repositoryModule,
-        useCaseModule
+        useCaseModule,
+        viewModelModule
     )
 }
 

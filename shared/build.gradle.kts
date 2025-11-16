@@ -3,6 +3,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.kotlinx.serialization)
+    alias(libs.plugins.sqlDelight)
 }
 
 kotlin {
@@ -24,7 +26,26 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            // Only business logic dependencies here - no UI
+            // Serialization
+            implementation(libs.kotlinx.serialization.json)
+            // Coroutines
+            implementation(libs.kotlinx.coroutines.core)
+            // SQLDelight
+            implementation(libs.sqlDelight.runtime)
+            implementation(libs.sqlDelight.coroutines.extensions)
+            // Ktor Client
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.ktor.client.logging)
+        }
+        androidMain.dependencies {
+            implementation(libs.sqlDelight.android.driver)
+            implementation(libs.ktor.client.android)
+        }
+        iosMain.dependencies {
+            implementation(libs.sqlDelight.native.driver)
+            implementation(libs.ktor.client.darwin)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -35,5 +56,13 @@ kotlin {
 android {
     namespace = "com.bpn.comics.shared"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+}
+
+sqldelight {
+    databases {
+        create("ComicsDatabase") {
+            packageName.set("com.bpn.comics.database")
+        }
+    }
 }
 

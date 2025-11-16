@@ -9,52 +9,26 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bpn.comics.data.model.Comic
-import com.bpn.comics.data.repository.ComicRepositoryFactory
-import com.bpn.comics.domain.repository.ComicRepository
 import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
 import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
-import com.bpn.comics.platform.DatabaseDriverFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComicsApp() {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     
-    // Initialize repository and use cases
-    val repository: ComicRepository? = remember {
-        try {
-            println("🔄 Initializing repository...")
-            val driverFactory = DatabaseDriverFactory(context)
-            val repo = ComicRepositoryFactory.createRepository(driverFactory)
-            println("✅ Repository initialized successfully")
-            repo
-        } catch (e: Exception) {
-            println("❌ Failed to initialize repository: ${e.message}")
-            e.printStackTrace()
-            null
-        }
-    }
-    
-    val getInitialComicsUseCase = remember(repository) {
-        repository?.let { GetInitialComicsUseCase(it) }
-    }
-    
-    val loadMoreComicsUseCase = remember(repository) {
-        repository?.let { LoadMoreComicsUseCase(it) }
-    }
-    
-    val hasMoreComicsUseCase = remember(repository) {
-        repository?.let { HasMoreComicsUseCase(it) }
-    }
+    // Inject use cases from Koin
+    val getInitialComicsUseCase: GetInitialComicsUseCase = koinInject()
+    val loadMoreComicsUseCase: LoadMoreComicsUseCase = koinInject()
+    val hasMoreComicsUseCase: HasMoreComicsUseCase = koinInject()
     
     // State for comics list
     var comics by remember { mutableStateOf<List<Comic>>(emptyList()) }
@@ -65,7 +39,7 @@ fun ComicsApp() {
     
     // Load initial comics when composable is first displayed
     LaunchedEffect(Unit) {
-        if (getInitialComicsUseCase != null && comics.isEmpty() && !isLoading) {
+        if (comics.isEmpty() && !isLoading) {
             scope.launch(Dispatchers.IO) {
                 isLoading = true
                 errorMessage = null
@@ -73,7 +47,7 @@ fun ComicsApp() {
                     println("🔄 Loading initial comics...")
                     val initialComics = getInitialComicsUseCase(10)
                     comics = initialComics
-                    hasMore = hasMoreComicsUseCase?.invoke(initialComics.minOfOrNull { it.num } ?: 0) ?: false
+                    hasMore = hasMoreComicsUseCase.invoke(initialComics.minOfOrNull { it.num } ?: 0)
                     println("✅ Loaded ${initialComics.size} initial comics")
                 } catch (e: Exception) {
                     errorMessage = "Error: ${e.message}"
@@ -95,9 +69,7 @@ fun ComicsApp() {
                 if (lastVisibleIndex != null && 
                     lastVisibleIndex >= totalItems - 3 && 
                     hasMore && 
-                    !isLoadingMore && 
-                    loadMoreComicsUseCase != null &&
-                    hasMoreComicsUseCase != null) {
+                    !isLoadingMore) {
                     
                     val oldestComicNumber = comics.minOfOrNull { it.num } ?: 0
                     if (hasMoreComicsUseCase.invoke(oldestComicNumber)) {
@@ -202,15 +174,6 @@ fun ComicsApp() {
                         }
                     }
                 }
-            }
-            
-            if (repository == null) {
-                Text(
-                    text = "Repository not initialized",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp)
-                )
             }
         }
     }

@@ -1,4 +1,4 @@
-package com.bpn.comics.ui.screen.comic
+package com.bpn.comics.ui.screen.comics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box

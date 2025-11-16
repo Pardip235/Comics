@@ -6,4 +6,7 @@ package com.bpn.comics.navigation
 sealed class ComicRoute(val route: String) {
     object Comics : ComicRoute("comics")
     object Favorites : ComicRoute("favorites")
+    object ComicDetail : ComicRoute("comicDetail/{comicNumber}") {
+        fun createRoute(comicNumber: Int) = "comicDetail/$comicNumber"
+    }
 }

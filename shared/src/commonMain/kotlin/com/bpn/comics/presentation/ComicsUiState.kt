@@ -10,7 +10,6 @@ data class ComicsUiState(
     val comics: List<Comic> = emptyList(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val errorMessage: String? = null,
     val errorType: ErrorType? = null,
     val hasMore: Boolean = true
 )

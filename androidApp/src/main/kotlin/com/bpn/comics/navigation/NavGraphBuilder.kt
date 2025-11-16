@@ -5,7 +5,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.bpn.comics.ui.screen.comic.ComicsScreen
+import androidx.navigation.navArgument
+import com.bpn.comics.ui.screen.comicdetail.ComicDetailScreen
+import com.bpn.comics.ui.screen.comics.ComicsScreen
 
 /**
  * Composable function that sets up all navigation routes
@@ -23,9 +25,24 @@ fun NavGraphSetup(
     ) {
         composable(ComicRoute.Comics.route) {
             ComicsScreen(
-                onComicClick = {
-                    // TODO Navigate to comic detail screen later
+                onComicClick = { comicNumber ->
+                    navController.navigate(ComicRoute.ComicDetail.createRoute(comicNumber))
                 }
+            )
+        }
+
+        composable(
+            route = ComicRoute.ComicDetail.route,
+            arguments = listOf(
+                navArgument("comicNumber") {
+                    type = androidx.navigation.NavType.IntType
+                }
+            )
+        ) { backStackEntry ->
+            val comicNumber = backStackEntry.arguments?.getInt("comicNumber") ?: 0
+            ComicDetailScreen(
+                comicNumber = comicNumber,
+                onBackClick = { navController.popBackStack() }
             )
         }
 

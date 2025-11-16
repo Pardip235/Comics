@@ -1,4 +1,4 @@
-package com.bpn.comics.ui.screen.comic
+package com.bpn.comics.ui.screen.comics
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,13 +11,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bpn.comics.data.model.Comic
-import com.bpn.comics.presentation.ComicsUiState
 import com.bpn.comics.presentation.ComicsViewModel
-import com.bpn.comics.util.ErrorType
+import com.bpn.comics.ui.common.EmptyScreen
+import com.bpn.comics.ui.common.ErrorScreen
+import com.bpn.comics.ui.common.LoadingScreen
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,13 +43,12 @@ fun ComicsScreen(
         )
 
         when {
-            uiState.isLoading && uiState.comics.isEmpty() -> LoadingScreen()
-            uiState.errorMessage != null -> ErrorScreen(
-                errorMessage = uiState.errorMessage,
+            uiState.isLoading && uiState.comics.isEmpty() -> LoadingScreen(message = "Loading comics...")
+            uiState.errorType != null -> ErrorScreen(
                 errorType = uiState.errorType,
                 onRetry = viewModel::retry
             )
-            uiState.comics.isEmpty() -> EmptyScreen()
+            uiState.comics.isEmpty() -> EmptyScreen(message = "No comics available")
             else -> {
                 LazyColumn(
                     state = listState,
@@ -99,139 +98,6 @@ fun ComicsScreen(
 }
 
 
-@Composable
-private fun EmptyScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "No comics available",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun ErrorScreen(
-    errorMessage: String?,
-    errorType: ErrorType?,
-    onRetry: () -> Unit,
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Title based on error type
-                Text(
-                    text = when (errorType) {
-                        ErrorType.NETWORK_ERROR -> "No Internet Connection"
-                        ErrorType.UNKNOWN_ERROR -> "Error"
-                        null -> "Error"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // Message based on error type - UI has freedom to show appropriate message
-                Text(
-                    text = when (errorType) {
-                        ErrorType.NETWORK_ERROR -> 
-                            "No internet connection. Please check your network settings and try again."
-                        ErrorType.UNKNOWN_ERROR -> 
-                            errorMessage ?: "Something went wrong. Please try again."
-                        null -> 
-                            errorMessage ?: "Something went wrong"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Retry")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LoadingScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Loading comics...")
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun EmptyScreenPreview() {
-    MaterialTheme {
-        EmptyScreen()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ErrorScreenNetworkPreview() {
-    MaterialTheme {
-        ErrorScreen(
-            errorMessage = "Unable to resolve host",
-            errorType = ErrorType.NETWORK_ERROR,
-            onRetry = {}
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ErrorScreenUnknownPreview() {
-    MaterialTheme {
-        ErrorScreen(
-            errorMessage = "Failed to parse response",
-            errorType = ErrorType.UNKNOWN_ERROR,
-            onRetry = {}
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun LoadingScreenPreview() {
-    MaterialTheme {
-        LoadingScreen()
-    }
-}
 
 @Preview(showBackground = true)
 @Composable

@@ -40,7 +40,7 @@ class ComicsViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorType = null) }
             
             try {
                 println("🔄 ViewModel: Loading initial comics...")
@@ -66,7 +66,6 @@ class ComicsViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = e.message,
                         errorType = errorType
                     )
                 }
@@ -131,7 +130,6 @@ class ComicsViewModel(
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
-                        errorMessage = e.message,
                         errorType = errorType
                     )
                 }
@@ -146,7 +144,6 @@ class ComicsViewModel(
     fun retry() {
         _uiState.update { 
             it.copy(
-                errorMessage = null,
                 errorType = null
             )
         }
@@ -163,7 +160,6 @@ class ComicsViewModel(
                 comics = emptyList(),
                 isLoading = false,
                 isLoadingMore = false,
-                errorMessage = null,
                 errorType = null,
                 hasMore = true
             )
@@ -172,12 +168,11 @@ class ComicsViewModel(
     }
 
     /**
-     * Clear error message.
+     * Clear error.
      */
     fun clearError() {
         _uiState.update { 
             it.copy(
-                errorMessage = null,
                 errorType = null
             )
         }

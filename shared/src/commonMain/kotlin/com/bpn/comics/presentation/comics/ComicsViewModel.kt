@@ -2,16 +2,15 @@ package com.bpn.comics.presentation.comics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bpn.comics.domain.usecase.GetInitialComicsUseCase
-import com.bpn.comics.domain.usecase.HasMoreComicsUseCase
+import com.bpn.comics.domain.usecase.LoadInitialComicsUseCase
 import com.bpn.comics.domain.usecase.LoadMoreComicsUseCase
+import com.bpn.comics.domain.usecase.ObserveComicsUseCase
 import com.bpn.comics.domain.usecase.PerformCacheCleanupUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
-import com.bpn.comics.presentation.FavoritesEventManager
+import com.bpn.comics.presentation.executeWithErrorHandling
+import com.bpn.comics.presentation.observeFlow
 import com.bpn.comics.util.ErrorType
 import com.bpn.comics.util.PaginationConfig
-import com.bpn.comics.util.isIOException
-import com.bpn.comics.util.isKtorNetworkException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,261 +18,216 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for managing comics list state and business logic.
+ * ViewModel for managing comics list screen state and business logic.
+ * 
+ * Implements cache-first strategy with reactive data observation:
+ * - Observes comics from database (single source of truth)
+ * - Handles initial loading, pagination, and refresh
+ * - Manages favorite toggling
+ * - Performs automatic cache cleanup on initialization
+ * 
+ * @property uiState The current UI state exposed as a [StateFlow]
  */
 class ComicsViewModel(
-    private val getInitialComicsUseCase: GetInitialComicsUseCase,
+    private val observeComicsUseCase: ObserveComicsUseCase,
+    private val loadInitialComicsUseCase: LoadInitialComicsUseCase,
     private val loadMoreComicsUseCase: LoadMoreComicsUseCase,
-    private val hasMoreComicsUseCase: HasMoreComicsUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    private val favoritesEventManager: FavoritesEventManager,
     private val performCacheCleanupUseCase: PerformCacheCleanupUseCase
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ComicsUiState())
+    private val _uiState = MutableStateFlow(ComicsUiState(isLoading = true))
     val uiState: StateFlow<ComicsUiState> = _uiState.asStateFlow()
+    
+    private var initialLoadJob: kotlinx.coroutines.Job? = null
 
     init {
-        // Perform automatic cache cleanup on app start (background task)
         performCacheCleanup()
-        // Load initial comics
+        // Start with loading state
+        _uiState.update { it.copy(isLoading = true) }
+        observeComics()
         loadInitialComics()
     }
     
     /**
-     * Perform automatic cache cleanup in the background.
-     * This runs silently without affecting the UI.
+     * Determines if initial load is still in progress.
+     * Initial load is considered in progress if:
+     * - isLoading is true AND comics list is empty (no data loaded yet)
+     * - AND initial load job is still active
      */
+    private val isInitialLoadInProgress: Boolean
+        get() = _uiState.value.isLoading && 
+                _uiState.value.comics.isEmpty() && 
+                initialLoadJob?.isActive == true
+
     private fun performCacheCleanup() {
         viewModelScope.launch {
-            try {
-                val deletedCount = performCacheCleanupUseCase()
-                if (deletedCount > 0) {
-                    println("🧹 ComicsViewModel: Cleaned up $deletedCount old comics from cache")
-                }
-            } catch (e: Exception) {
-                // Silently fail - cache cleanup shouldn't block app startup
-                println("⚠️ ComicsViewModel: Cache cleanup failed: ${e.message}")
-            }
+            runCatching { performCacheCleanupUseCase() }
+                .onFailure { /* Silently fail - cache cleanup is non-critical */ }
         }
     }
 
-    /**
-     * Load initial comics when ViewModel is created.
-     */
-    private fun loadInitialComics() {
-        if (_uiState.value.comics.isNotEmpty() || _uiState.value.isLoading) {
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorType = null) }
-            
-            try {
-                println("🔄 ViewModel: Loading initial comics...")
-                val comics = getInitialComicsUseCase(PaginationConfig.INITIAL_LOAD_COUNT)
-                
+    private fun observeComics() {
+        observeFlow(
+            flow = observeComicsUseCase(),
+            onError = ::handleError,
+            onSuccess = { comics ->
                 val oldestComicNumber = comics.minOfOrNull { it.num } ?: 0
-                val hasMore = hasMoreComicsUseCase(oldestComicNumber)
-                
-                _uiState.update {
-                    it.copy(
+                // hasMore = true if no comics loaded (0) or if oldest > 1 (more available)
+                // hasMore = false only when oldestComicNumber == 1 (reached the first comic)
+                val hasMore = oldestComicNumber != 1
+                _uiState.update { currentState ->
+                    currentState.copy(
                         comics = comics,
-                        isLoading = false,
-                        hasMore = hasMore
+                        // Set isLoading = false if:
+                        // 1. We have data (comics.isNotEmpty()), OR
+                        // 2. Initial load is not in progress (either completed or never started)
+                        isLoading = if (comics.isNotEmpty() || !isInitialLoadInProgress) {
+                            false
+                        } else {
+                            currentState.isLoading
+                        },
+                        isLoadingMore = false,
+                        hasMore = hasMore,
+                        errorType = null
                     )
                 }
-                println("✅ ViewModel: Loaded ${comics.size} initial comics")
-            } catch (e: Exception) {
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
+            }
+        )
+    }
+
+    private fun loadInitialComics() {
+        // Prevent duplicate initial loads
+        if (initialLoadJob?.isActive == true) return
+
+        initialLoadJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorType = null) }
+            executeWithErrorHandling(
+                operation = { loadInitialComicsUseCase(PaginationConfig.INITIAL_LOAD_COUNT) },
+                onError = { errorType ->
+                    // Job will complete, marking initial load as done
+                    handleError(errorType)
                 }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorType = errorType
-                    )
-                }
-                println(
-                    "❌ ViewModel: Error loading initial comics: " +
-                            "${e.message} (Type: $errorType)"
-                )
+            )
+            // Job completes here - isInitialLoadInProgress will now return false
+            // The Flow observation will handle updating isLoading when data arrives
+            // But if we still have no data after load attempt, ensure loading is false
+            // (This handles the case where API fails and cache is empty)
+            if (_uiState.value.comics.isEmpty() && _uiState.value.errorType == null) {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
     /**
-     * Load more comics for pagination.
-     * Called when user scrolls near the end of the list.
+     * Loads more comics for pagination.
+     * 
+     * Fetches older comics from the API and updates the cache.
+     * Only loads if there are more comics available and not already loading.
      */
     fun loadMoreComics() {
         val currentState = _uiState.value
-        
-        if (!currentState.hasMore || currentState.isLoadingMore || currentState.isLoading) {
-            return
-        }
+        if (currentState.isLoadingMore || currentState.isLoading || !currentState.hasMore) return
 
-        val oldestComicNumber = currentState.comics.minOfOrNull { it.num } ?: 0
-        
-        if (!hasMoreComicsUseCase(oldestComicNumber)) {
+        val oldestComicNumber = currentState.comics.minOfOrNull { it.num } ?: return
+
+        // No more comics if we've reached comic #1
+        if (oldestComicNumber == 1) {
             _uiState.update { it.copy(hasMore = false) }
             return
         }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }
-            
-            try {
-                println("🔄 ViewModel: Loading more comics... (oldest: $oldestComicNumber)")
-                val moreComics = loadMoreComicsUseCase(
-                    oldestComicNumber = oldestComicNumber,
-                    count = PaginationConfig.PAGINATION_LOAD_COUNT
-                )
-                
-                if (moreComics.isNotEmpty()) {
-                    val updatedComics = currentState.comics + moreComics
-                    val newOldest = updatedComics.minOfOrNull { it.num } ?: 0
-                    val hasMore = hasMoreComicsUseCase(newOldest)
-                    
-                    _uiState.update {
-                        it.copy(
-                            comics = updatedComics,
-                            isLoadingMore = false,
-                            hasMore = hasMore
-                        )
-                    }
-                    println("✅ ViewModel: Loaded ${moreComics.size} more comics. " +
-                            "Total: ${updatedComics.size}"
+            executeWithErrorHandling(
+                operation = {
+                    loadMoreComicsUseCase(
+                        oldestComicNumber = oldestComicNumber,
+                        count = PaginationConfig.PAGINATION_LOAD_COUNT
                     )
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoadingMore = false,
-                            hasMore = false
-                        )
-                    }
-                    println("📦 ViewModel: No more comics available")
-                }
-            } catch (e: Exception) {
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
-                }
-                _uiState.update {
-                    it.copy(
-                        isLoadingMore = false,
-                        errorType = errorType
-                    )
-                }
-                println(
-                    "❌ ViewModel: Error loading more comics: " +
-                            "${e.message} (Type: $errorType)"
-                )
-            }
+                },
+                onError = ::handleError
+            )
         }
     }
 
     /**
-     * Retry loading initial comics after an error.
+     * Retries loading initial comics after an error.
+     * Cancels any existing load operation and starts a fresh load.
      */
     fun retry() {
+        // Cancel any existing initial load
+        initialLoadJob?.cancel()
         _uiState.update { 
             it.copy(
-                errorType = null
+                errorType = null,
+                isLoading = true
             )
         }
         loadInitialComics()
     }
 
     /**
-     * Refresh the comics list by clearing current comics and reloading.
-     * This forces a fresh load even if comics are already loaded.
+     * Refresh comics list from API (force refresh).
      */
     fun refresh() {
-        _uiState.update { 
-            it.copy(
-                comics = emptyList(),
-                isLoading = false,
-                isLoadingMore = false,
-                errorType = null,
-                hasMore = true
-            )
-        }
-        loadInitialComics()
-    }
+        val currentState = _uiState.value
+        // Don't refresh if already refreshing or loading
+        if (currentState.isRefreshing || currentState.isLoading) return
 
-    /**
-     * Toggle favorite status for a comic.
-     * Uses optimistic UI update for better UX.
-     */
-    fun toggleFavorite(comicNumber: Int) {
-        val currentComic = _uiState.value.comics.find { it.num == comicNumber }
-            ?: return
+        viewModelScope.launch {
+            // Show refresh indicator while keeping existing data
+            _uiState.update {
+                it.copy(
+                    isRefreshing = true,
+                    errorType = null
+                )
+            }
 
-        // Optimistic UI update - toggle immediately
-        val optimisticFavoriteStatus = !currentComic.isFavorite
-        _uiState.update { currentState ->
-            currentState.copy(
-                comics = currentState.comics.map { comic ->
-                    if (comic.num == comicNumber) {
-                        comic.copy(isFavorite = optimisticFavoriteStatus)
-                    } else {
-                        comic
+            executeWithErrorHandling(
+                operation = {
+                    // Force refresh from API (bypasses stale checks)
+                    loadInitialComicsUseCase(PaginationConfig.INITIAL_LOAD_COUNT)
+                },
+                onError = { errorType ->
+                    // On error, hide refresh indicator but keep cached data
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            errorType = errorType
+                        )
                     }
                 }
             )
-        }
 
-        viewModelScope.launch {
-            try {
-                val newFavoriteStatus = toggleFavoriteUseCase(comicNumber)
-                // Update with actual result from repository
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        comics = currentState.comics.map { comic ->
-                            if (comic.num == comicNumber) {
-                                comic.copy(isFavorite = newFavoriteStatus)
-                            } else {
-                                comic
-                            }
-                        },
-                        errorType = null
-                    )
-                }
-                println(
-                    "✅ ComicsViewModel: Toggled favorite for " +
-                            "comic #$comicNumber: $newFavoriteStatus"
-                )
-                // Notify that favorites have changed (for cross-platform observers)
-                favoritesEventManager.notifyFavoritesChanged()
-            } catch (e: Exception) {
-                // Revert optimistic update on error
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        comics = currentState.comics.map { comic ->
-                            if (comic.num == comicNumber) {
-                                comic.copy(isFavorite = currentComic.isFavorite)
-                            } else {
-                                comic
-                            }
-                        },
-                        errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                            ErrorType.NETWORK_ERROR
-                        } else {
-                            ErrorType.UNKNOWN_ERROR
-                        }
-                    )
-                }
-                println(
-                    "❌ ComicsViewModel: Error toggling favorite for " +
-                            "comic #$comicNumber: ${e.message}"
-                )
-            }
+            // Hide refresh indicator after operation completes
+            // Note: Data will update automatically via observeComics() Flow
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
-}
+    /**
+     * Toggles the favorite status of a comic.
+     * 
+     * @param comicNumber The number of the comic to toggle
+     */
+    fun toggleFavorite(comicNumber: Int) {
+        viewModelScope.launch {
+            executeWithErrorHandling(
+                operation = { toggleFavoriteUseCase(comicNumber) },
+                onError = ::handleError
+            )
+        }
+    }
 
+    private fun handleError(errorType: ErrorType) {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isLoadingMore = false,
+                isRefreshing = false,
+                errorType = errorType
+            )
+        }
+    }
+}

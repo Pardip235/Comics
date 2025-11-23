@@ -2,12 +2,12 @@ package com.bpn.comics.presentation.favorites
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bpn.comics.domain.usecase.GetFavoriteComicsUseCase
+import com.bpn.comics.domain.usecase.ObserveFavoriteComicsUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
-import com.bpn.comics.presentation.FavoritesEventManager
+import com.bpn.comics.presentation.executeWithErrorHandling
+import com.bpn.comics.presentation.observeFlow
 import com.bpn.comics.util.ErrorType
-import com.bpn.comics.util.isIOException
-import com.bpn.comics.util.isKtorNetworkException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,110 +15,70 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for managing favorites list state and business logic.
+ * ViewModel for managing favorites screen state and business logic.
+ * 
+ * Observes favorite comics from the database and handles:
+ * - Displaying all favorited comics
+ * - Toggling favorite status
+ * - Error handling and retry logic
+ * 
+ * @property uiState The current UI state exposed as a [StateFlow]
  */
 class FavoritesViewModel(
-    private val getFavoriteComicsUseCase: GetFavoriteComicsUseCase,
-    private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    private val favoritesEventManager: FavoritesEventManager
+    private val observeFavoriteComicsUseCase: ObserveFavoriteComicsUseCase,
+    private val toggleFavoriteUseCase: ToggleFavoriteUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FavoritesUiState())
     val uiState: StateFlow<FavoritesUiState> = _uiState.asStateFlow()
+    private var favoritesJob: Job? = null
 
     init {
-        loadFavorites()
-        // Observe favorites changes to refresh the list
-        observeFavoritesChanges()
+        observeFavorites()
     }
 
-    /**
-     * Load favorite comics from database.
-     */
-    fun loadFavorites() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorType = null) }
-
-            try {
-                println("🔄 FavoritesViewModel: Loading favorites...")
-                val favorites = getFavoriteComicsUseCase()
+    private fun observeFavorites() {
+        favoritesJob?.cancel()
+        _uiState.update { it.copy(isLoading = true, errorType = null) }
+        favoritesJob = observeFlow(
+            flow = observeFavoriteComicsUseCase(),
+            onError = ::handleError,
+            onSuccess = { favorites ->
                 _uiState.update {
                     it.copy(
                         favorites = favorites,
-                        isLoading = false
-                    )
-                }
-                println("✅ FavoritesViewModel: Loaded ${favorites.size} favorites")
-            } catch (e: Exception) {
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
-                }
-                _uiState.update {
-                    it.copy(
                         isLoading = false,
-                        errorType = errorType
+                        errorType = null
                     )
                 }
-                println(
-                    "❌ FavoritesViewModel: Error loading favorites: " +
-                            "${e.message} (Type: $errorType)"
-                )
             }
-        }
+        )
     }
 
     /**
-     * Toggle favorite status for a comic.
-     * Reloads favorites list after toggle (simpler approach).
+     * Toggles the favorite status of a comic.
+     * 
+     * @param comicNumber The number of the comic to toggle
      */
     fun toggleFavorite(comicNumber: Int) {
         viewModelScope.launch {
-            try {
-                toggleFavoriteUseCase(comicNumber)
-                // Refresh the favorites list after toggling
-                loadFavorites()
-                // Notify that favorites have changed
-                favoritesEventManager.notifyFavoritesChanged()
-            } catch (e: Exception) {
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
-                }
-                _uiState.update {
-                    it.copy(errorType = errorType)
-                }
-                println(
-                    "❌ FavoritesViewModel: Error toggling favorite for " +
-                            "comic #$comicNumber: ${e.message}"
-                )
-            }
+            executeWithErrorHandling(
+                operation = { toggleFavoriteUseCase(comicNumber) },
+                onError = ::handleError
+            )
         }
     }
 
     /**
-     * Retry loading favorites after an error.
+     * Retries loading favorites after an error.
      */
     fun retry() {
-        _uiState.update {
-            it.copy(errorType = null)
-        }
-        loadFavorites()
+        _uiState.update { it.copy(errorType = null) }
+        observeFavorites()
     }
 
-    /**
-     * Observe favorites changes from other screens.
-     * When favorites change elsewhere, refresh this list automatically.
-     */
-    private fun observeFavoritesChanges() {
-        viewModelScope.launch {
-            favoritesEventManager.favoritesChanged.collect {
-                println("🔄 FavoritesViewModel: Favorites changed, refreshing...")
-                loadFavorites()
-            }
-        }
+    private fun handleError(errorType: ErrorType) {
+        _uiState.update { it.copy(isLoading = false, errorType = errorType) }
     }
 }
 

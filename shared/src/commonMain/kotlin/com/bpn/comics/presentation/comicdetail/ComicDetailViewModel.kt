@@ -2,12 +2,13 @@ package com.bpn.comics.presentation.comicdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bpn.comics.domain.usecase.GetComicDetailUseCase
+import com.bpn.comics.domain.usecase.LoadComicByNumberUseCase
+import com.bpn.comics.domain.usecase.ObserveComicByNumberUseCase
 import com.bpn.comics.domain.usecase.ToggleFavoriteUseCase
-import com.bpn.comics.presentation.FavoritesEventManager
+import com.bpn.comics.presentation.executeWithErrorHandling
+import com.bpn.comics.presentation.observeFlow
 import com.bpn.comics.util.ErrorType
-import com.bpn.comics.util.isIOException
-import com.bpn.comics.util.isKtorNetworkException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,139 +16,95 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for managing comic detail state and business logic.
+ * ViewModel for managing comic detail screen state and business logic.
+ * 
+ * Observes a specific comic from the database and handles:
+ * - Loading comic details by number
+ * - Toggling favorite status
+ * - Error handling and retry logic
+ * 
+ * @property uiState The current UI state exposed as a [StateFlow]
  */
 class ComicDetailViewModel(
-    private val getComicDetailUseCase: GetComicDetailUseCase,
-    private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    private val favoritesEventManager: FavoritesEventManager
+    private val observeComicByNumberUseCase: ObserveComicByNumberUseCase,
+    private val loadComicByNumberUseCase: LoadComicByNumberUseCase,
+    private val toggleFavoriteUseCase: ToggleFavoriteUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ComicDetailUiState())
     val uiState: StateFlow<ComicDetailUiState> = _uiState.asStateFlow()
 
+    private var observedComicNumber: Int? = null
+    private var observationJob: Job? = null
+
     /**
-     * Load comic detail by number.
+     * Loads comic detail by number.
+     * 
+     * Starts observing the comic from database and triggers API fetch if needed.
+     * 
+     * @param comicNumber The number of the comic to load
      */
     fun loadComicDetail(comicNumber: Int) {
-        if (_uiState.value.isLoading) {
-            return
+        if (observedComicNumber != comicNumber) {
+            observedComicNumber = comicNumber
+            startObservation(comicNumber)
         }
 
         viewModelScope.launch {
-            _uiState.update { 
-                it.copy(
-                    isLoading = true,
-                    errorType = null
-                )
-            }
+            _uiState.update { it.copy(isLoading = true, errorType = null) }
+            executeWithErrorHandling(
+                operation = { loadComicByNumberUseCase(comicNumber) },
+                onError = ::handleError
+            )
+        }
+    }
 
-            try {
-                println("🔄 ComicDetailViewModel: Loading comic #$comicNumber...")
-                val comic = getComicDetailUseCase(comicNumber)
+    /**
+     * Retries loading the current comic after an error.
+     */
+    fun retry() {
+        observedComicNumber?.let { loadComicDetail(it) }
+    }
+
+    /**
+     * Clears the current error state.
+     */
+    fun clearError() {
+        _uiState.update { it.copy(errorType = null) }
+    }
+
+    /**
+     * Toggles the favorite status of the current comic.
+     * Does nothing if no comic is currently loaded.
+     */
+    fun toggleFavorite() {
+        val comicNumber = _uiState.value.comic?.num ?: return
+        viewModelScope.launch {
+            executeWithErrorHandling(
+                operation = { toggleFavoriteUseCase(comicNumber) },
+                onError = ::handleError
+            )
+        }
+    }
+
+    private fun startObservation(comicNumber: Int) {
+        observationJob?.cancel()
+        observationJob = observeFlow(
+            flow = observeComicByNumberUseCase(comicNumber),
+            onError = ::handleError,
+            onSuccess = { comic ->
                 _uiState.update {
                     it.copy(
                         comic = comic,
-                        isLoading = false
-                    )
-                }
-                println("✅ ComicDetailViewModel: Loaded comic #${comic.num}")
-            } catch (e: Exception) {
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
-                }
-                _uiState.update {
-                    it.copy(
                         isLoading = false,
-                        errorType = errorType
-                    )
-                }
-                println(
-                    "❌ ComicDetailViewModel: Error loading comic #$comicNumber: " +
-                            "${e.message} (Type: $errorType)"
-                )
-            }
-        }
-    }
-
-    /**
-     * Retry loading comic detail.
-     */
-    fun retry(comicNumber: Int) {
-        _uiState.update { 
-            it.copy(
-                errorType = null
-            )
-        }
-        loadComicDetail(comicNumber)
-    }
-
-    /**
-     * Clear error.
-     */
-    fun clearError() {
-        _uiState.update { 
-            it.copy(
-                errorType = null
-            )
-        }
-    }
-
-    /**
-     * Toggle favorite status for the current comic.
-     * Uses optimistic UI update for better UX.
-     */
-    fun toggleFavorite() {
-        val currentComic = _uiState.value.comic ?: return
-
-        // Store original favorite status for potential revert
-        val originalFavoriteStatus = currentComic.isFavorite
-
-        // Optimistic UI update - toggle immediately
-        val optimisticFavoriteStatus = !originalFavoriteStatus
-        _uiState.update {
-            it.copy(
-                comic = currentComic.copy(isFavorite = optimisticFavoriteStatus),
-                errorType = null
-            )
-        }
-
-        viewModelScope.launch {
-            try {
-                val newFavoriteStatus = toggleFavoriteUseCase(currentComic.num)
-                // Update with actual result from repository
-                _uiState.update {
-                    it.copy(
-                        comic = currentComic.copy(isFavorite = newFavoriteStatus),
                         errorType = null
                     )
                 }
-                println(
-                    "✅ ComicDetailViewModel: Toggled favorite for " +
-                            "comic #${currentComic.num}: $newFavoriteStatus"
-                )
-                // Notify that favorites have changed (for cross-platform observers)
-                favoritesEventManager.notifyFavoritesChanged()
-            } catch (e: Exception) {
-                // Revert optimistic update on error
-                val errorType = if (isKtorNetworkException(e) || isIOException(e)) {
-                    ErrorType.NETWORK_ERROR
-                } else {
-                    ErrorType.UNKNOWN_ERROR
-                }
-                _uiState.update {
-                    it.copy(
-                        comic = currentComic.copy(isFavorite = originalFavoriteStatus),
-                        errorType = errorType
-                    )
-                }
-                println(
-                    "❌ ComicDetailViewModel: Error toggling favorite: ${e.message}"
-                )
             }
-        }
+        )
+    }
+
+    private fun handleError(errorType: ErrorType) {
+        _uiState.update { it.copy(isLoading = false, errorType = errorType) }
     }
 }
-

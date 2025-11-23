@@ -16,14 +16,17 @@ import platform.Foundation.NSURLErrorNetworkConnectionLost
 actual fun isIOException(exception: Throwable): Boolean {
     // Check if it's an NSError with network-related error codes
     val cause = exception.cause
-    if (cause is NSError && cause.domain == NSURLErrorDomain) {
-        val code = cause.code.toInt()
-        return when (code) {
-            NSURLErrorNotConnectedToInternet.toInt(),
-            NSURLErrorTimedOut.toInt(),
-            NSURLErrorCannotConnectToHost.toInt(),
-            NSURLErrorNetworkConnectionLost.toInt() -> true
-            else -> false
+    @Suppress("USELESS_IS_CHECK")
+    if (cause is NSError) {
+        if (cause.domain == NSURLErrorDomain) {
+            val code = cause.code.toInt()
+            return when (code) {
+                NSURLErrorNotConnectedToInternet.toInt(),
+                NSURLErrorTimedOut.toInt(),
+                NSURLErrorCannotConnectToHost.toInt(),
+                NSURLErrorNetworkConnectionLost.toInt() -> true
+                else -> false
+            }
         }
     }
     

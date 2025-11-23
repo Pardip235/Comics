@@ -1,6 +1,7 @@
 package com.bpn.comics.platform
 
 import platform.Foundation.NSDate
+import platform.Foundation.timeIntervalSince1970
 
 /**
  * iOS implementation of getCurrentTimestampSeconds.

@@ -35,10 +35,17 @@ The app follows **Clean Architecture** principles with clear separation of conce
 ```
 
 **Key Components:**
-- **Data Layer**: `ComicRepositoryImpl`, `XkcdApiService`, SQLDelight database
-- **Domain Layer**: Use cases (`GetInitialComicsUseCase`, `LoadMoreComicsUseCase`, `ToggleFavoriteUseCase`, etc.)
-- **Presentation Layer**: ViewModels (`ComicsViewModel`, `ComicDetailViewModel`, `FavoritesViewModel`)
-- **Platform Layer**: Platform-specific implementations (Android/iOS drivers, HTTP clients)
+- **Data Layer**: `ComicRepositoryImpl`, `XkcdApiService`, SQLDelight database (Flow-based, cache-first with stale-while-revalidate)
+  - Uses `ComicDto` for API responses (internal to data layer)
+  - Database as single source of truth with reactive Flow streams
+  - TTL-based cache refresh (1h for list, 24h for detail)
+- **Domain Layer**: Use cases (`ObserveComicsUseCase`, `ObserveFavoriteComicsUseCase`, `LoadInitialComicsUseCase`, `LoadMoreComicsUseCase`, `ToggleFavoriteUseCase`, etc.)
+  - `Observe*UseCase`: Expose reactive Flow streams
+  - `Load*UseCase`: Trigger API fetches and cache updates
+- **Presentation Layer**: ViewModels (`ComicsViewModel`, `ComicDetailViewModel`, `FavoritesViewModel`) using extension functions
+  - `ViewModelExtensions`: Common error handling and Flow observation utilities
+  - Composition over inheritance pattern
+- **Platform Layer**: Platform-specific implementations (Android/iOS drivers, HTTP clients, logging)
 
 ### Features
 
@@ -46,6 +53,8 @@ The app follows **Clean Architecture** principles with clear separation of conce
    - Infinite scroll pagination (auto-loads when scrolling near bottom)
    - Error handling with retry mechanism
    - Loading states (initial load, pagination, refresh)
+   - Stale-while-revalidate: Shows cached data while refreshing in background
+   - Smart initial loading: Shows loading indicator first, then data or error
 
 2. **Comic Detail Screen**
    - Displays full comic details
@@ -56,8 +65,13 @@ The app follows **Clean Architecture** principles with clear separation of conce
    - Lists all favorited comics (Android - fully implemented, iOS - placeholder)
    - Reactive updates when favorites change
 
-4. **Offline Support**
-   - Comics are cached in local SQLDelight database
+4. **Offline Support & Caching Strategy**
+   - **Cache-First Approach**: Always shows cached data immediately
+   - **Stale-While-Revalidate**: Displays cached data even if stale, refreshes in background
+   - **TTL-Based Refresh**: 
+     - Comics list: Refreshes if cache is older than 1 hour
+     - Comic detail: Refreshes if cache is older than 24 hours
+   - **Automatic Background Refresh**: Triggers API calls when cache is empty or stale
    - Falls back to cached data when network fails
    - Favorite status persists locally
 
@@ -67,10 +81,14 @@ The app follows **Clean Architecture** principles with clear separation of conce
    - Size-based limiting: Keeps maximum 500 non-favorite comics (configurable)
    - Automatic cleanup runs on app start in the background
    - Favorites are always preserved regardless of age or cache size
+   - Database versioning: Uses `comics_v2.db` to handle schema changes
 
-6. **Cross-Platform Event System**
-   - `FavoritesEventManager` uses SharedFlow to notify changes across screens
-   - Enables reactive UI updates when favorites are toggled
+6. **Reactive Architecture**
+   - **Flow-Based Repository**: All data operations expose reactive Flow streams
+   - **Database as Single Source of Truth**: ViewModels observe database changes via Flow
+   - **Automatic UI Updates**: UI automatically reflects data changes without manual synchronization
+   - **No Event Managers**: Reactive Flow eliminates need for event dispatchers
+   - **Cache-First with Background Refresh**: Immediate data display with smart background updates
 
 ## Thought Process
 
@@ -84,24 +102,38 @@ I chose KMP to maximize code sharing while maintaining native UI experiences. Th
 ### Architecture Decisions
 
 1. **Clean Architecture**: Separates concerns and makes the codebase testable and maintainable
-2. **MVVM Pattern**: ViewModels manage UI state and business logic, making UI reactive
-3. **Use Cases**: Encapsulate business rules and make the domain layer independent of data sources
-4. **Repository Pattern**: Abstracts data sources (API + Database) behind a single interface
-5. **Dependency Injection (Koin)**: Simplifies dependency management and testing
-6. **Cache Management**: Automatic cache cleanup prevents unbounded growth while preserving user favorites
+2. **Reactive Flow-Based Architecture**: 
+   - Repository exposes Flow streams for all data operations
+   - Database is the single source of truth
+   - ViewModels observe Flows for automatic UI updates
+3. **MVVM Pattern**: ViewModels manage UI state and business logic, making UI reactive
+4. **Use Cases**: Encapsulate business rules and make the domain layer independent of data sources
+   - `Observe*UseCase`: For reactive data observation
+   - `Load*UseCase`: For triggering data fetches
+5. **Repository Pattern**: Abstracts data sources (API + Database) behind a single interface
+   - Cache-first strategy with stale-while-revalidate
+   - TTL-based automatic refresh
+6. **Dependency Injection (Koin)**: Simplifies dependency management and testing
+7. **Composition over Inheritance**: ViewModels use extension functions instead of BaseViewModel
+8. **Model Separation**: 
+   - `ComicDto`: Data layer model (API responses)
+   - `Comic`: Domain model (includes business logic like `isFavorite`)
+   - Extension functions convert between layers
+9. **Logging**: Napier library for cross-platform logging (Android Log / iOS NSLog)
+10. **Cache Management**: Automatic cache cleanup prevents unbounded growth while preserving user favorites
 
 ### Testing Strategy
 
-- **Unit Tests**: Using MockK for mocking dependencies
-- **In-Memory Database**: SQLDelight's in-memory driver for isolated repository tests
-- **Test Dispatchers**: `MainDispatcherRule` to handle `viewModelScope` in tests
-- **Base Test Class**: `MainTest` provides common test infrastructure
+The project currently includes the shared testing infrastructure (in-memory SQLDelight driver, coroutine test utilities) but only minimal unit tests. The priority has been stabilizing the reactive data flow; expanding end-to-end and ViewModel tests is tracked as a follow-up task.
 
 ### iOS Integration
 
 - **StateFlow Extensions**: Helper functions to observe Kotlin `StateFlow` from Swift
 - **ViewModel Wrappers**: `ObservableObject` wrappers that bridge Kotlin ViewModels to SwiftUI
 - **Koin iOS**: Platform-specific Koin initialization for iOS
+- **Napier Logging**: Logs visible in Xcode Console (View > Debug Area > Activate Console)
+- **iOS Deployment Target**: 16.0 (required for NavigationStack)
+- **Error Tracking**: OSLog integration for error logging in Xcode
 
 ## Project Structure
 
@@ -118,7 +150,7 @@ comics/
 │       │   └── util/               # Utilities (CacheConfig, ErrorType, etc.)
 │       ├── androidMain/            # Android-specific implementations
 │       ├── iosMain/                # iOS-specific implementations
-│       └── commonTest/             # Shared test code
+│       └── androidUnitTest/        # JVM-only unit tests (MockK, SQLDelight)
 ├── androidApp/                     # Android application
 │   └── src/main/
 │       ├── kotlin/                 # Android UI (Jetpack Compose)
@@ -131,15 +163,7 @@ comics/
 
 ### ✅ Unit & Integration Tests
 
-**Test Coverage:**
-- `ComicRepositoryImplTest`: Tests repository with in-memory database
-- `GetInitialComicsUseCaseTest`: Tests use case logic
-- `ComicsViewModelTest`: Tests ViewModel state management
-
-**Test Infrastructure:**
-- `MainTest` base class with `MainDispatcherRule` for coroutine testing
-- MockK for mocking dependencies
-- In-memory SQLDelight driver for database tests
+Test coverage is intentionally lean at the moment. The shared module ships with coroutine test utilities and in-memory SQLDelight drivers so that repository/use-case tests can be added quickly. Expanding the `androidUnitTest` source set with MockK-powered tests is on the roadmap.
 
 **Cache Management:**
 - Automatic cache cleanup with time-based (30 days) and size-based (500 comics) limits
@@ -173,8 +197,8 @@ comics/
    - Pull-to-refresh (currently only refresh button)
 
 5. **Code Quality**:
-   - Replace `println` with proper logging framework
-   - Add more documentation
+   - ✅ Napier logging integrated
+   - ✅ Comprehensive KDoc documentation added
    - Code formatting/linting automation
 
 6. **Performance Optimizations**:
@@ -205,7 +229,7 @@ comics/
    - More consistent error handling patterns
 
 4. **Documentation**:
-   - More comprehensive KDoc comments
+   - ✅ Comprehensive KDoc comments added
    - Architecture decision records (ADRs)
    - Setup and contribution guidelines
 
@@ -265,19 +289,33 @@ comics/
 - **SQLDelight**: Local database with automatic cache management
 - **Ktor**: HTTP client
 - **Kotlin Coroutines**: Asynchronous programming
+- **Kotlin Flow**: Reactive streams for data observation
 - **StateFlow**: Reactive state management
+- **Napier**: Cross-platform logging library (KMM-friendly)
 - **MockK**: Testing/mocking
 - **JUnit**: Testing framework
 
 ## Cache Management Strategy
 
-The app implements an automatic cache cleanup strategy to prevent unbounded database growth while preserving user favorites:
+The app implements a sophisticated caching strategy with automatic cleanup and smart refresh:
 
-### Configuration
+### Cache-First with Stale-While-Revalidate
+
+1. **Immediate Data Display**: Always shows cached data immediately (if available)
+2. **Background Refresh**: Automatically refreshes stale data in the background
+3. **TTL-Based Refresh**:
+   - **Comics List**: Refreshes if latest comic is older than 1 hour (`CACHE_FRESHNESS_TTL_SECONDS`)
+   - **Comic Detail**: Refreshes if comic is older than 24 hours (`COMIC_DETAIL_CACHE_TTL_SECONDS`)
+4. **Smart Refresh Logic**: Only triggers API calls when cache is actually stale
+5. **Error Resilience**: On API failure, cached data remains available
+
+### Automatic Cache Cleanup
+
+**Configuration:**
 - **Max Cache Age**: 30 days (configurable via `CacheConfig.MAX_CACHE_AGE_DAYS`)
 - **Max Non-Favorite Comics**: 500 comics (configurable via `CacheConfig.MAX_NON_FAVORITE_COMICS`)
 
-### How It Works
+**How It Works:**
 1. **Automatic Cleanup**: Runs automatically when the app starts (in `ComicsViewModel.init`)
 2. **Time-Based Expiration**: Removes comics older than the configured age limit (favorites preserved)
 3. **Size-Based Limiting**: When non-favorite comics exceed the limit, oldest ones are removed (favorites preserved)
@@ -286,7 +324,26 @@ The app implements an automatic cache cleanup strategy to prevent unbounded data
 ### Implementation Details
 - `PerformCacheCleanupUseCase`: Encapsulates cache cleanup logic
 - `ComicRepository.performAutomaticCacheCleanup()`: Combines time-based and size-based clearing
-- Private helper methods handle the actual deletion logic
+- `last_refreshed_at` column tracks cache freshness for TTL-based refresh
 - Platform abstraction `TimeProvider` (expect/actual) ensures consistent timestamp handling across platforms
+- Database versioning: Uses `comics_v2.db` to handle schema changes (replaces old database)
+
+## Logging & Error Tracking
+
+### Napier Logging (KMM-Friendly)
+
+The app uses **Napier** for cross-platform logging:
+
+- **Android**: Logs appear in Logcat with tag "ComicsApp"
+- **iOS**: Logs appear in Xcode Console (View > Debug Area > Activate Console)
+- **Error Logging**: All errors are logged with full stack traces
+- **Usage**: `Logger.e(tag, message, throwable)` for errors, `Logger.d/i/w` for other levels
+
+### Error Tracking
+
+- **Unknown Errors**: Enhanced error messages guide users to check console
+- **OSLog Integration**: iOS uses OSLog for structured error logging
+- **Automatic Error Logging**: ViewModels automatically log all errors with full details
+- **Xcode Console**: Filter by "ComicsApp" or search for specific tags to find errors
 
 

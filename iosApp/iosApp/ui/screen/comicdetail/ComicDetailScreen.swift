@@ -19,7 +19,7 @@ struct ComicDetailScreen: View {
                 } else if viewModel.uiState.errorType != nil {
                     ErrorView(
                         errorType: viewModel.uiState.errorType!,
-                        onRetry: { viewModel.retry(comicNumber: comicNumber) }
+                        onRetry: { viewModel.retry() }
                     )
                 } else if let comic = viewModel.uiState.comic {
                     ComicDetailContent(comic: comic)

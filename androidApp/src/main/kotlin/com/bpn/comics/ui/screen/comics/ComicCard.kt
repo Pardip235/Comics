@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
-import com.bpn.comics.data.model.Comic
+import com.bpn.comics.domain.model.Comic
 
 @Composable
 fun ComicCard(

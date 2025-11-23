@@ -16,11 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
-import com.bpn.comics.data.model.Comic
+import com.bpn.comics.domain.model.Comic
 import com.bpn.comics.presentation.comicdetail.ComicDetailViewModel
 import com.bpn.comics.ui.common.EmptyScreen
 import com.bpn.comics.ui.common.ErrorScreen
 import com.bpn.comics.ui.common.LoadingScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +31,7 @@ fun ComicDetailScreen(
     onBackClick: () -> Unit,
     viewModel: ComicDetailViewModel = koinInject()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(comicNumber) {
         viewModel.loadComicDetail(comicNumber)
@@ -46,9 +47,9 @@ fun ComicDetailScreen(
                     }
                 },
                 actions = {
-                    if (uiState.comic != null) {
+                    uiState.comic?.let { comic ->
                         FavoriteIconButton(
-                            isFavorite = uiState.comic!!.isFavorite,
+                            isFavorite = comic.isFavorite,
                             onToggle = { viewModel.toggleFavorite() }
                         )
                     }
@@ -60,12 +61,14 @@ fun ComicDetailScreen(
             uiState.isLoading -> LoadingScreen(message = "Loading comic...")
             uiState.errorType != null -> ErrorScreen(
                 errorType = uiState.errorType,
-                onRetry = { viewModel.retry(comicNumber) }
+                onRetry = viewModel::retry
             )
-            uiState.comic != null -> ComicDetailContent(
-                comic = uiState.comic!!,
-                modifier = Modifier.padding(paddingValues)
-            )
+            uiState.comic != null -> uiState.comic?.let { comic ->
+                ComicDetailContent(
+                    comic = comic,
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
             else -> EmptyScreen(message = "Comic not found")
         }
     }

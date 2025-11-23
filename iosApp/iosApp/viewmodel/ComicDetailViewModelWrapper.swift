@@ -1,6 +1,7 @@
 import Foundation
 import Shared
 import SwiftUI
+import os.log
 
 @MainActor
 class ComicDetailViewModelWrapper: ObservableObject {
@@ -8,6 +9,7 @@ class ComicDetailViewModelWrapper: ObservableObject {
     
     private let viewModel: ComicDetailViewModel
     private var cancellable: Cancellable?
+    private let logger = Logger(subsystem: "com.bpn.comics", category: "ComicDetailViewModel")
     
     init(comicNumber: Int32) {
         viewModel = KoinIOS.shared.getComicDetailViewModel()
@@ -22,7 +24,13 @@ class ComicDetailViewModelWrapper: ObservableObject {
             scope: scope
         ) { [weak self] newState in
             Task { @MainActor in
-                self?.uiState = newState as! ComicDetailUiState
+                let newState = newState as! ComicDetailUiState
+                self?.uiState = newState
+                
+                // Log errors to Xcode console
+                if let errorType = newState.errorType {
+                    self?.logger.error("Error in ComicDetailViewModel: \(errorType.name, privacy: .public)")
+                }
             }
         }
         
@@ -38,8 +46,8 @@ class ComicDetailViewModelWrapper: ObservableObject {
         viewModel.toggleFavorite()
     }
     
-    func retry(comicNumber: Int32) {
-        viewModel.retry(comicNumber: comicNumber)
+    func retry() {
+        viewModel.retry()
     }
     
     func clearError() {

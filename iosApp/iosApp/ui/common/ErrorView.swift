@@ -1,9 +1,12 @@
 import SwiftUI
 import Shared
+import os.log
 
 struct ErrorView: View {
     let errorType: ErrorType
     let onRetry: () -> Void
+    
+    private let logger = Logger(subsystem: "com.bpn.comics", category: "ErrorView")
     
     var body: some View {
         VStack(spacing: 16) {
@@ -19,13 +22,20 @@ struct ErrorView: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding()
+        .onAppear {
+            // Log error to Xcode console
+            logger.error("Error displayed: \(errorType.name, privacy: .public)")
+        }
     }
     
     private var errorMessage: String {
-        if errorType == ErrorType.networkError {
+        switch errorType {
+        case .networkError:
             return "Network error. Please check your connection."
-        } else {
-            return "Something went wrong. Please try again."
+        case .unknownError:
+            return "Something went wrong. Please try again"
+        default:
+            return "An error occurred. Please try again."
         }
     }
 }

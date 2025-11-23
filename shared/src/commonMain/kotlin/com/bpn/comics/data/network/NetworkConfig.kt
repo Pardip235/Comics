@@ -44,11 +44,7 @@ class HttpClientFactory(
             if (config.enableLogging) {
                 install(Logging) {
                     level = LogLevel.INFO
-                    logger = object : Logger {
-                        override fun log(message: String) {
-                            println("🌐 Network: $message")
-                        }
-                    }
+                    // Logger output goes to platform-specific logging
                 }
             }
             

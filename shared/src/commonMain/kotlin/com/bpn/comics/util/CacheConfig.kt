@@ -17,5 +17,19 @@ object CacheConfig {
      * Favorites are always preserved regardless of this limit.
      */
     const val MAX_NON_FAVORITE_COMICS = 500
+    
+    /**
+     * Cache freshness TTL in seconds.
+     * Data older than this will be considered stale and refreshed in background.
+     * Default: 1 hour (3600 seconds)
+     */
+    const val CACHE_FRESHNESS_TTL_SECONDS = 3600L
+    
+    /**
+     * Cache freshness TTL for individual comics in seconds.
+     * Individual comic details older than this will be considered stale.
+     * Default: 24 hours (86400 seconds)
+     */
+    const val COMIC_DETAIL_CACHE_TTL_SECONDS = 86400L
 }
 

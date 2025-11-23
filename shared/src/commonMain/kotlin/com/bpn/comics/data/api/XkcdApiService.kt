@@ -1,49 +1,38 @@
 package com.bpn.comics.data.api
 
-import com.bpn.comics.data.model.Comic
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.request.*
+import com.bpn.comics.data.model.ComicDto
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
 
 class XkcdApiService(
     private val httpClient: HttpClient
 ) : XkcdApiServiceInterface {
 
-    override suspend fun getLatestComic(): Comic {
+    override suspend fun getLatestComic(): ComicDto {
         val response = httpClient.get("/info.0.json")
-        val comic = response.body<Comic>()
-        return comic
+        return response.body()
     }
 
-    override suspend fun getComicByNumber(number: Int): Comic {
+    override suspend fun getComicByNumber(number: Int): ComicDto {
         val response = httpClient.get("/$number/info.0.json")
-        val comic = response.body<Comic>()
-        return comic
+        return response.body()
     }
 
-    override suspend fun getComicsRange(startNumber: Int, endNumber: Int): List<Comic> {
-        println("🔍 XkcdApiService: Fetching comics range $startNumber-$endNumber...")
-        val comics = mutableListOf<Comic>()
+    override suspend fun getComicsRange(startNumber: Int, endNumber: Int): List<ComicDto> {
+        val comics = mutableListOf<ComicDto>()
         for (num in startNumber..endNumber) {
-            try {
-                val comic = getComicByNumber(num)
-                comics.add(comic)
-            } catch (e: Exception) {
-                println("❌ XkcdApiService: Failed to fetch comic #$num: ${e.message}")
-                continue
-            }
+            runCatching { getComicByNumber(num) }
+                .onSuccess { comics.add(it) }
+                .onFailure { /* Silently skip failed comics */ }
         }
-        println("✅ XkcdApiService: Fetched ${comics.size} comics from range")
         return comics
     }
 
-    override suspend fun getRecentComics(count: Int): List<Comic> {
-        println("🔍 XkcdApiService: Fetching $count recent comics...")
+    override suspend fun getRecentComics(count: Int): List<ComicDto> {
         val latestComic = getLatestComic()
         val startNumber = maxOf(1, latestComic.num - count + 1)
-        val comics = getComicsRange(startNumber, latestComic.num)
-        println("✅ XkcdApiService: Returning ${comics.size} recent comics")
-        return comics
+        return getComicsRange(startNumber, latestComic.num)
     }
 
     override fun close() {

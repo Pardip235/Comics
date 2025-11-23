@@ -19,6 +19,20 @@ struct ComicsScreen: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
+                            // Show refresh indicator at top when refreshing
+                            if viewModel.uiState.isRefreshing {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("Refreshing...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            
                             ForEach(Array(viewModel.uiState.comics.enumerated()), id: \.element.num) { index, comic in
                                 NavigationLink(
                                     destination: ComicDetailScreen(comicNumber: Int32(comic.num))
@@ -52,9 +66,17 @@ struct ComicsScreen: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.refresh() }) {
-                        Image(systemName: "arrow.clockwise")
+                        Group {
+                            if viewModel.uiState.isRefreshing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                                    .frame(width: 24, height: 24)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
                     }
-                    .disabled(viewModel.uiState.isLoading)
+                    .disabled(viewModel.uiState.isLoading || viewModel.uiState.isRefreshing)
                 }
             }
         }

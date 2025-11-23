@@ -79,13 +79,14 @@ class ComicsViewModel(
                 _uiState.update { currentState ->
                     currentState.copy(
                         comics = comics,
-                        // Set isLoading = false if:
-                        // 1. We have data (comics.isNotEmpty()), OR
-                        // 2. Initial load is not in progress (either completed or never started)
-                        isLoading = if (comics.isNotEmpty() || !isInitialLoadInProgress) {
-                            false
+                        // Keep isLoading = true during initial load, even if cached data exists
+                        // Only set isLoading = false when initial load is complete
+                        isLoading = if (isInitialLoadInProgress) {
+                            // Keep loading state during initial load
+                            true
                         } else {
-                            currentState.isLoading
+                            // Initial load is complete, stop loading
+                            false
                         },
                         isLoadingMore = false,
                         hasMore = hasMore,

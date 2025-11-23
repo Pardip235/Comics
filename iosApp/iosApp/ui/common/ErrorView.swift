@@ -33,7 +33,7 @@ struct ErrorView: View {
         case .networkError:
             return "Network error. Please check your connection."
         case .unknownError:
-            return "Something went wrong. Please try again"
+            return "Something went wrong. Please try again.\n\nCheck Xcode console (View > Debug Area > Activate Console) for details."
         default:
             return "An error occurred. Please try again."
         }

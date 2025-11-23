@@ -77,6 +77,15 @@ class FavoritesViewModel(
         observeFavorites()
     }
 
+    /**
+     * Refreshes the favorites list by re-observing from the database.
+     * This is useful for manual refresh actions.
+     */
+    fun refresh() {
+        _uiState.update { it.copy(errorType = null) }
+        observeFavorites()
+    }
+
     private fun handleError(errorType: ErrorType) {
         _uiState.update { it.copy(isLoading = false, errorType = errorType) }
     }

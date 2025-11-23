@@ -4,6 +4,7 @@ import com.bpn.comics.di.appModule
 import com.bpn.comics.di.platformModule
 import com.bpn.comics.presentation.comicdetail.ComicDetailViewModel
 import com.bpn.comics.presentation.comics.ComicsViewModel
+import com.bpn.comics.presentation.favorites.FavoritesViewModel
 import com.bpn.comics.util.initializeLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,15 @@ object KoinIOS {
      * Get fresh ComicDetailViewModel instance (not singleton)
      */
     fun getComicDetailViewModel(): ComicDetailViewModel {
+        return koinInstance?.get() ?: throw IllegalStateException(
+            "Koin not initialized. Call doInitKoinIOS() first."
+        )
+    }
+
+    /**
+     * Get FavoritesViewModel instance
+     */
+    fun getFavoritesViewModel(): FavoritesViewModel {
         return koinInstance?.get() ?: throw IllegalStateException(
             "Koin not initialized. Call doInitKoinIOS() first."
         )

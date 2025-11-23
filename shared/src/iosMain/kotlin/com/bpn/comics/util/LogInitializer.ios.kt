@@ -1,0 +1,12 @@
+package com.bpn.comics.util
+
+import io.github.aakira.napier.DebugAntilog
+import io.github.aakira.napier.Napier
+
+/**
+ * iOS-specific logging initialization.
+ */
+actual fun initializeLogging() {
+    Napier.base(DebugAntilog())
+}
+

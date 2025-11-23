@@ -21,6 +21,7 @@ koin = "3.5.6"
 sqlDelight = "2.0.2"
 coil = "2.7.0"
 mockk = "1.13.8"
+napier = "2.7.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -77,6 +78,9 @@ coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 
 # Testing
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+# Logging
+napier = { module = "io.github.aakira:napier", version.ref = "napier" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

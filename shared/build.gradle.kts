@@ -45,6 +45,8 @@ kotlin {
             implementation(libs.koin.core)
             // ViewModel
             implementation(libs.androidx.lifecycle.viewmodelCompose)
+            // Logging - Napier (KMM-friendly logging library)
+            implementation(libs.napier)
         }
         androidMain.dependencies {
             implementation(libs.sqlDelight.android.driver)
@@ -68,8 +70,6 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-            implementation(libs.mockk)
-            implementation(libs.junit)
         }
     }
 }

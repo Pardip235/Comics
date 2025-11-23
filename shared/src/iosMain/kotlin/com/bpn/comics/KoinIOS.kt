@@ -4,6 +4,7 @@ import com.bpn.comics.di.appModule
 import com.bpn.comics.di.platformModule
 import com.bpn.comics.presentation.comicdetail.ComicDetailViewModel
 import com.bpn.comics.presentation.comics.ComicsViewModel
+import com.bpn.comics.util.initializeLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,6 +21,10 @@ object KoinIOS {
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     fun doInitKoinIOS() {
+        // Initialize Napier logging (KMM-friendly logging)
+        // This will output to Xcode console via NSLog
+        initializeLogging()
+        
         val koinApplication = startKoin {
             modules(appModule() + platformModule())
         }

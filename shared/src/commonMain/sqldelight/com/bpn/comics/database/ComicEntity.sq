@@ -11,7 +11,8 @@ CREATE TABLE ComicEntity (
     safe_title TEXT,
     transcript TEXT,
     is_favorite INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    last_refreshed_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 CREATE INDEX ComicEntity_created_at ON ComicEntity(created_at);
@@ -19,26 +20,20 @@ CREATE INDEX ComicEntity_is_favorite ON ComicEntity(is_favorite);
 
 -- Queries
 insertComic:
-INSERT OR REPLACE INTO ComicEntity (num, title, img, alt, year, month, day, link, news, safe_title, transcript, is_favorite)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO ComicEntity (num, title, img, alt, year, month, day, link, news, safe_title, transcript, is_favorite, last_refreshed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 getAllComics:
-SELECT * FROM ComicEntity ORDER BY created_at DESC;
+SELECT * FROM ComicEntity ORDER BY num DESC;
 
 getComicByNumber:
 SELECT * FROM ComicEntity WHERE num = ?;
 
 getFavoriteComics:
-SELECT * FROM ComicEntity WHERE is_favorite = 1 ORDER BY created_at DESC;
+SELECT * FROM ComicEntity WHERE is_favorite = 1 ORDER BY num DESC;
 
 updateFavoriteStatus:
 UPDATE ComicEntity SET is_favorite = ? WHERE num = ?;
-
-isFavorite:
-SELECT COUNT(*) FROM ComicEntity WHERE num = ? AND is_favorite = 1;
-
-clearAllComics:
-DELETE FROM ComicEntity;
 
 -- Clear comics older than specified timestamp, but preserve favorites
 clearOldComics:

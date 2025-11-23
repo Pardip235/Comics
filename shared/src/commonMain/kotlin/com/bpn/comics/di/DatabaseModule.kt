@@ -1,6 +1,7 @@
 package com.bpn.comics.di
 
 import com.bpn.comics.database.ComicsDatabase
+import com.bpn.comics.database.DatabaseMigration
 import com.bpn.comics.platform.DatabaseDriverFactory
 import app.cash.sqldelight.db.SqlDriver
 import org.koin.dsl.module
@@ -13,7 +14,12 @@ val databaseModule = module {
     // Database
     single<ComicsDatabase> {
         val driverFactory: DatabaseDriverFactory = get()
-        ComicsDatabase(driver = driverFactory.createDriver())
+        val database = ComicsDatabase(driver = driverFactory.createDriver())
+        
+        // Run migrations after creating database instance
+        DatabaseMigration.migrate(database)
+        
+        database
     }
 }
 

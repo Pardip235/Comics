@@ -4,13 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.bpn.comics.data.model.Comic
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bpn.comics.domain.model.Comic
 import com.bpn.comics.presentation.favorites.FavoritesViewModel
 import com.bpn.comics.ui.common.EmptyScreen
 import com.bpn.comics.ui.common.ErrorScreen
@@ -24,7 +24,7 @@ fun FavoritesScreen(
     onComicClick: (Int) -> Unit,
     viewModel: FavoritesViewModel = koinInject()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(

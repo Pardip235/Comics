@@ -13,7 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.bpn.comics.data.model.Comic
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bpn.comics.domain.model.Comic
 import com.bpn.comics.presentation.comics.ComicsViewModel
 import com.bpn.comics.ui.common.EmptyScreen
 import com.bpn.comics.ui.common.ErrorScreen
@@ -26,7 +27,7 @@ fun ComicsScreen(
     onComicClick: (Int) -> Unit,
     viewModel: ComicsViewModel = koinInject()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -35,9 +36,16 @@ fun ComicsScreen(
             actions = {
                 IconButton(
                     onClick = { viewModel.refresh() },
-                    enabled = !uiState.isLoading
+                    enabled = !uiState.isLoading && !uiState.isRefreshing
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    if (uiState.isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                 }
             }
         )
@@ -61,6 +69,35 @@ fun ComicsScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Show refresh indicator at top when refreshing
+                    if (uiState.isRefreshing) {
+                        item {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Refreshing...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     items(
                         count = uiState.comics.size,
                         key = { index -> uiState.comics[index].num }
